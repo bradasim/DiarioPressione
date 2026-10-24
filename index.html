@@ -928,21 +928,7 @@
         let currentVisibleRecords = [];
         let currentDatePreset = 'all'; // 'all', '7d', '30d', '90d', 'custom'
 
-        // DATI ORIGINALI DALLA FOTO DEL QUADERNO (Partiti il 21 Aprile)
-        // 21 Aprile: Mattino (108/76/69 & 108/64/64), Pranzo (112/72/66 & 110/72/64), Cena (107/65/66 & 104/66/64)
-        // 22 Aprile: Mattino (100/66/59 & 108/64/59), Pranzo (115/73/67 & 113/72/68), Cena (109/78/60 & 110/69/71)
-        // 23 Aprile: Mattino (102/65/62 & 111/65/57)
-        const SEED_DATA = [
-            { data: '2021-04-21', slot: 'mattino', ora: '06:30', max_1: 108, min_1: 76, bat_1: 69, max_2: 108, min_2: 64, bat_2: 64, note: 'Trascritto da quaderno (Merc 21)' },
-            { data: '2021-04-21', slot: 'pranzo', ora: '12:30', max_1: 112, min_1: 72, bat_1: 66, max_2: 110, min_2: 72, bat_2: 64, note: 'Trascritto da quaderno (Merc 21)' },
-            { data: '2021-04-21', slot: 'cena', ora: '19:00', max_1: 107, min_1: 65, bat_1: 66, max_2: 104, min_2: 66, bat_2: 64, note: 'Trascritto da quaderno (Merc 21)' },
-
-            { data: '2021-04-22', slot: 'mattino', ora: '06:30', max_1: 100, min_1: 66, bat_1: 59, max_2: 108, min_2: 64, bat_2: 59, note: 'Trascritto da quaderno (Giov 22)' },
-            { data: '2021-04-22', slot: 'pranzo', ora: '12:30', max_1: 115, min_1: 73, bat_1: 67, max_2: 113, min_2: 72, bat_2: 68, note: 'Trascritto da quaderno (Giov 22)' },
-            { data: '2021-04-22', slot: 'cena', ora: '19:00', max_1: 109, min_1: 78, bat_1: 60, max_2: 110, min_2: 69, bat_2: 71, note: 'Trascritto da quaderno (Giov 22)' },
-
-            { data: '2021-04-23', slot: 'mattino', ora: '06:30', max_1: 102, min_1: 65, bat_1: 62, max_2: 111, min_2: 65, bat_2: 57, note: 'Trascritto da quaderno (Ven 23)' }
-        ];
+        const SEED_DATA = [];
 
         const STORAGE_KEY = 'blood_pressure_sqlite_db_v1';
 

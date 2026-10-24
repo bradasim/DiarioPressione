@@ -38,6 +38,13 @@ Applicazione web client-side moderna, autonoma e orientata alla privacy per il m
   - Tabella completa con indicazione di data, momento della giornata, valori della 1ª e 2ª misurazione, media risultante, badge di categoria pressoria e note cliniche.
   - Campo di ricerca dinamica istantanea per data, slot o annotazioni.
   - Funzioni complete di modifica (Edit) e rimozione (Delete) dei singoli record.
+- **Filtro Temporale Globale**:
+  - Selettore rapido di periodo (*Tutto*, *Ultimi 7 gg*, *Ultimi 30 gg*, *Ultimi 3 mesi*, *Personalizzato Da/A*) posizionato in cima alla schermata.
+  - Sincronizza istantaneamente e congiuntamente i KPI, il Grafico, la Tabella e l'Esportazione PDF su quel preciso intervallo temporale.
+- **Referto Clinico PDF a 1-Click (Modulo Separato `pdf-report.js`)**:
+  - Pulsante **"Esporta PDF"** che genera e scarica direttamente un referto formattato in formato A4.
+  - Include: testata clinica con date del periodo, card statistiche/KPI con classificazione ESC/ESH, immagine del grafico ottimizzata per stampa su fondo bianco e tabella dettagliata di tutte le misurazioni con note.
+  - Codice isolato nel modulo autonomo [`pdf-report.js`](file:///d:/Python/DiarioPressione/pdf-report.js).
 - **Selezione Multipla & Cancellazione in Blocco**:
   - Checkbox per ogni riga e checkbox master "Seleziona tutti" con gestione dello stato indeterminato.
   - Barra d'azione contestuale che indica il numero di record selezionati con pulsante rapido per selezionare l'intero database.
@@ -70,6 +77,7 @@ L'applicazione classifica automaticamente le misurazioni in base ai criteri dell
 ## 🛠️ Stack Tecnologico
 
 - **Frontend & Logica**: HTML5 semantico, CSS3, JavaScript Vanilla (ES6+ moderno).
+- **Modulo PDF Dedicato**: [`pdf-report.js`](file:///d:/Python/DiarioPressione/pdf-report.js) basato su [jsPDF](https://github.com/parallax/jsPDF) e [jspdf-autotable](https://github.com/simonbengtsson/jsPDF-AutoTable).
 - **Stile & Design**: [Tailwind CSS](https://tailwindcss.com/) (tramite CDN) con tema dark rifinito, tipografia con font [Inter](https://fonts.google.com/specimen/Inter) e icone [FontAwesome 6](https://fontawesome.com/).
 - **Visualizzazione Dati**: [Chart.js](https://www.chartjs.org/) per il rendering canvas reattivo e fluido dei grafici.
 - **Motore Dati**: [SQL.js](https://sql.js.org/) (SQLite compilato in **WebAssembly / Wasm**).
@@ -174,6 +182,17 @@ In alto nell'intestazione sono disponibili gli strumenti per la gestione e la mi
      ```
 3. **Esporta CSV**:
    - Genera un file `.csv` formattato, comprensivo di medie calcolate, pronto per essere importato in **Microsoft Excel**, **Google Fogli** o inviato al proprio medico curante.
+4. **Esporta Referto PDF**:
+   - Genera istantaneamente il documento PDF `referto_pressione_AAAA-MM-GG.pdf` strutturato su misura per la consultazione medica (impaginazione A4, sfondo bianco a risparmio inchiostro, testata clinica con intervallo di date, sintesi statistiche, grafico e tabella analitica).
+
+---
+
+## 📱 Utilizzo su Dispositivi Mobili (Android / iOS)
+
+L'applicazione è completamente responsive e compatibile con i browser mobili (Chrome, Edge, Samsung Internet, Firefox):
+- **Visualizzazione e Inserimento**: l'interfaccia si adatta a smartphone e tablet.
+- **Download PDF & Database**: su Android il file PDF viene salvato direttamente nella cartella *Download* e può essere aperto con Google Drive / Adobe Viewer o inviato via WhatsApp/Email al medico.
+- **Consiglio d'uso**: se utilizzata da mobile, è consigliabile servirla tramite server locale Wi-Fi (es. `python -m http.server 8000`) o hostarla su un servizio gratuito di pagine statiche (come GitHub Pages) per evitare che i blocchi di sicurezza del protocollo locale `file:///` sui browser Android impediscano il salvataggio dei file scaricati.
 
 ---
 

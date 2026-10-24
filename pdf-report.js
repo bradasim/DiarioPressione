@@ -1,26 +1,23 @@
 /**
  * Modulo Generazione Referto PDF - Diario Pressione Arteriosa
  * File: pdf-report.js
- * Genera un PDF ottimizzato (~50-80 KB) con download Data URI garantito su file:///
+ * Supporta intestazione clinica con dati paziente, ottimizzazione peso (~50-80 KB),
+ * apertura nativa su file:///, download automatico e condivisione via Web Share API
  */
 
 window.PdfReport = {
     /**
-     * Genera e avvia il download del referto clinico in formato PDF
+     * Costruisce il documento jsPDF con tutti i dati clinici, statistiche, grafico e tabella
      * @param {Object} options
-     * @param {Array} options.records - Array delle misurazioni filtrate per il periodo
-     * @param {string} options.dateRangeLabel - Etichetta descrittiva del periodo (es. "Ultimi 30 giorni")
-     * @param {Object} options.kpis - Oggetto con { avgMax, avgMin, avgBat, categoryLabel, totalRecords }
-     * @param {Object} options.chartInstance - Istanza attiva di Chart.js (per estrarre il grafico)
+     * @returns {Object} { doc, fileName }
      */
-    generate: async function (options) {
-        const { records, dateRangeLabel, kpis, chartInstance } = options;
+    buildPdfDocument: function (options) {
+        const { records, dateRangeLabel, kpis, chartInstance, userProfile } = options;
 
-        // Individuazione robusta del costruttore jsPDF
         const jsPDFConstructor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF || (window.jspdf && window.jspdf.default);
 
         if (!jsPDFConstructor) {
-            throw new Error("Libreria jsPDF non disponibile. Verifica la connessione a Internet per il caricamento dei moduli.");
+            throw new Error("Libreria jsPDF non disponibile. Verifica la connessione a Internet.");
         }
 
         const doc = new jsPDFConstructor({
@@ -35,8 +32,9 @@ window.PdfReport = {
         const margin = 14;
 
         // --- 1. HEADER CLINICO (Fascia superiore) ---
+        const headerHeight = (userProfile && (userProfile.nome || userProfile.cognome || userProfile.data_nascita)) ? 34 : 28;
         doc.setFillColor(15, 23, 42); // slate-900
-        doc.rect(0, 0, pageWidth, 28, 'F');
+        doc.rect(0, 0, pageWidth, headerHeight, 'F');
 
         doc.setTextColor(255, 255, 255);
         doc.setFont('helvetica', 'bold');
@@ -48,14 +46,38 @@ window.PdfReport = {
         doc.setTextColor(148, 163, 184); // slate-400
         doc.text("Referto Clinico & Storico Misurazioni (Protocollo doppia rilevazione)", margin, 17);
 
-        // Data generazione e Periodo
+        // Data generazione e Periodo a destra
         const todayStr = new Date().toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
         doc.setFontSize(8);
         doc.setTextColor(203, 213, 225);
         doc.text(`Generato il: ${todayStr}`, pageWidth - margin, 11, { align: 'right' });
         doc.text(`Periodo: ${dateRangeLabel || 'Tutto lo storico'}`, pageWidth - margin, 17, { align: 'right' });
 
-        let currentY = 33;
+        // Dati Paziente nell'header (se configurati dall'ingranaggio)
+        if (userProfile && (userProfile.nome || userProfile.cognome || userProfile.data_nascita)) {
+            let patientLine = "PAZIENTE: ";
+            const fullName = `${userProfile.nome || ''} ${userProfile.cognome || ''}`.trim();
+            patientLine += fullName ? fullName.toUpperCase() : "NON SPECIFICATO";
+
+            if (userProfile.data_nascita) {
+                const age = calculateAge(userProfile.data_nascita);
+                patientLine += `  •  NATO/A: ${formatDateItalianPdf(userProfile.data_nascita)}${age ? ` (${age})` : ''}`;
+            }
+
+            if (userProfile.note) {
+                patientLine += `  •  ${userProfile.note}`;
+            }
+
+            doc.setFillColor(30, 41, 59); // slate-800
+            doc.roundedRect(margin, 21.5, pageWidth - (margin * 2), 9, 1.5, 1.5, 'F');
+
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(7.5);
+            doc.setTextColor(45, 212, 191); // teal-400
+            doc.text(patientLine, margin + 3, 27.5);
+        }
+
+        let currentY = headerHeight + 5;
 
         // --- 2. BOX SINTESI CLINICA (KPI) ---
         doc.setFillColor(248, 250, 252); // slate-50
@@ -90,7 +112,7 @@ window.PdfReport = {
 
         currentY += 27;
 
-        // --- 3. GRAFICO DELL'ANDAMENTO (Ottimizzato e compresso in JPEG per ridurre il peso) ---
+        // --- 3. GRAFICO DELL'ANDAMENTO ---
         if (chartInstance && records && records.length > 0) {
             try {
                 const chartImg = getCleanChartImage(chartInstance);
@@ -167,7 +189,7 @@ window.PdfReport = {
                 1: { cellWidth: 26 },
                 2: { cellWidth: 32 },
                 3: { cellWidth: 32 },
-                4: { cellWidth: 36, fontStyle: 'bold', textColor: [13, 148, 136] }, // teal-600
+                4: { cellWidth: 36, fontStyle: 'bold', textColor: [13, 148, 136] },
                 5: { cellWidth: 'auto' }
             },
             didDrawPage: function () {
@@ -187,24 +209,31 @@ window.PdfReport = {
             window.autoTable(doc, autoTableConfig);
         }
 
-        // --- 5. GESTIONE SALVATAGGIO / ANTEPRIMA ---
         const fileNameDate = new Date().toISOString().slice(0, 10);
-        const fileName = `referto_pressione_${fileNameDate}.pdf`;
+        let patientSlug = '';
+        if (userProfile && (userProfile.cognome || userProfile.nome)) {
+            patientSlug = `_${(userProfile.cognome || userProfile.nome).toLowerCase().replace(/[^a-z0-9]/g, '')}`;
+        }
+        const fileName = `referto_pressione${patientSlug}_${fileNameDate}.pdf`;
 
-        // Imposta proprietà del documento PDF
         doc.setDocumentProperties({
             title: fileName,
             subject: 'Referto Diario Pressione Arteriosa',
-            author: 'Diario Pressione Arteriosa',
+            author: (userProfile && (userProfile.nome || userProfile.cognome)) ? `${userProfile.nome} ${userProfile.cognome}`.trim() : 'Diario Pressione Arteriosa',
             creator: 'Diario Pressione Arteriosa'
         });
 
+        return { doc, fileName };
+    },
+
+    /**
+     * Genera e apre o scarica il PDF
+     */
+    generate: async function (options) {
+        const { doc, fileName } = this.buildPdfDocument(options);
         const pdfBlob = doc.output('blob');
         const blobUrl = URL.createObjectURL(pdfBlob);
 
-        // Su protocollo locale file:///, Chrome e i browser Chromium bloccano i download automatici con nome
-        // e li salvano come file temporanei anonimi (UUID). Aprire il referto nella scheda nativa del browser
-        // permette all'utente di vederlo subito, stamparlo o salvarlo con nome senza alcuna restrizione.
         const isFileProtocol = window.location.protocol === 'file:';
         let openedTab = false;
 
@@ -228,12 +257,22 @@ window.PdfReport = {
                 downloadLink.click();
                 setTimeout(() => {
                     document.body.removeChild(downloadLink);
-                }, 1000);
+                    URL.revokeObjectURL(blobUrl);
+                }, 1200);
             } catch (err) {
                 console.warn("Fallback doc.save:", err);
                 doc.save(fileName);
             }
         }
+    },
+
+    /**
+     * Restituisce il Blob del PDF e il nome del file per la Web Share API
+     */
+    createPdfBlob: async function (options) {
+        const { doc, fileName } = this.buildPdfDocument(options);
+        const blob = doc.output('blob');
+        return { blob, fileName };
     }
 };
 
@@ -243,10 +282,18 @@ function formatDateItalianPdf(dateStr) {
     return `${day}/${month}/${year}`;
 }
 
-/**
- * Converte il canvas a risoluzione ottimale (800px) e formato JPEG compresso (qualità 0.82)
- * Riduciamo il peso dell'immagine da oltre 2 MB a meno di 50 KB mantenendo una nitidezza perfetta!
- */
+function calculateAge(birthDateStr) {
+    if (!birthDateStr) return '';
+    const [y, m, d] = birthDateStr.split('-').map(Number);
+    const today = new Date();
+    let age = today.getFullYear() - y;
+    const mDiff = today.getMonth() - (m - 1);
+    if (mDiff < 0 || (mDiff === 0 && today.getDate() < d)) {
+        age--;
+    }
+    return age > 0 ? `${age} anni` : '';
+}
+
 function getCleanChartImage(chartInstance) {
     if (!chartInstance || !chartInstance.canvas) return null;
     try {
@@ -260,14 +307,10 @@ function getCleanChartImage(chartInstance) {
         tempCanvas.height = targetHeight;
         const ctx = tempCanvas.getContext('2d');
 
-        // Sfondo bianco nitido
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, targetWidth, targetHeight);
-
-        // Disegna il grafico scalato
         ctx.drawImage(canvas, 0, 0, targetWidth, targetHeight);
 
-        // Esporta in JPEG leggerissimo ad alta nitidezza
         return tempCanvas.toDataURL('image/jpeg', 0.82);
     } catch (e) {
         console.warn("Errore cattura grafico ottimizzato:", e);

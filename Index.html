@@ -106,35 +106,89 @@
                             <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse mr-1"></span> Avvio Wasm...
                         </span>
                     </div>
-                    <p class="text-xs text-slate-400">Doppia misurazione giornaliera con SQLite WebAssembly & calcolo
-                        automatico della media</p>
+                    <p class="text-xs text-slate-400">
+                        <span id="headerPatientBadge" class="hidden font-semibold text-teal-400 mr-1.5"><i class="fa-solid fa-user text-[11px] mr-1"></i><span id="headerPatientName"></span> •</span>
+                        Doppia misurazione giornaliera con SQLite WebAssembly & calcolo automatico della media
+                    </p>
                 </div>
             </div>
 
             <div class="flex items-center flex-wrap gap-2">
-                <input type="file" id="sqliteFileInput" accept=".sqlite,.db,.sqlite3" class="hidden" onchange="handleSqliteImport(event)">
-                <button id="btnImportSqlite" onclick="document.getElementById('sqliteFileInput').click()"
-                    class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700 transition flex items-center gap-1.5"
-                    title="Importa un database SQLite (.sqlite) e sovrascrivi i valori con stessa data e fascia oraria">
-                    <i class="fa-solid fa-file-import text-amber-400"></i> Importa .sqlite
+                <!-- Bottone Condividi (Web Share API su mobile / PDF download fallback) -->
+                <button id="btnSharePdf" onclick="sharePdfReport()"
+                    class="px-3.5 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-semibold text-xs transition flex items-center gap-2 shadow-lg shadow-sky-500/20 active:scale-95"
+                    title="Condividi referto PDF con medico o su WhatsApp, Telegram, Email">
+                    <i class="fa-solid fa-share-nodes text-slate-950"></i> Condividi
                 </button>
-                <button id="btnExportSqlite" onclick="exportSqliteDatabase()"
-                    class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700 transition flex items-center gap-1.5"
-                    title="Scarica il file di database SQLite effettivo">
-                    <i class="fa-solid fa-database text-teal-400"></i> Esporta .sqlite
-                </button>
-                <button id="btnExportCsv" onclick="exportCsv()"
-                    class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700 transition flex items-center gap-1.5">
-                    <i class="fa-solid fa-file-csv text-blue-400"></i> Esporta CSV
-                </button>
+
+                <!-- Bottone Esporta PDF -->
                 <button id="btnExportPdf" onclick="exportPdfReport()"
-                    class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700 transition flex items-center gap-1.5"
+                    class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition flex items-center gap-1.5 active:scale-95"
                     title="Scarica referto clinico in formato PDF per il periodo selezionato">
                     <i class="fa-solid fa-file-pdf text-rose-400"></i> Esporta PDF
                 </button>
+
+                <!-- Bottone Nuova Misurazione -->
                 <button onclick="openModal('addModal')"
-                    class="px-4 py-1.5 rounded-lg bg-teal-500 hover:bg-teal-400 text-slate-950 font-semibold text-xs transition flex items-center gap-2 shadow-lg shadow-teal-500/20 active:scale-95">
+                    class="px-3.5 py-1.5 rounded-lg bg-teal-500 hover:bg-teal-400 text-slate-950 font-semibold text-xs transition flex items-center gap-2 shadow-lg shadow-teal-500/20 active:scale-95">
                     <i class="fa-solid fa-plus font-bold"></i> Nuova Misurazione
+                </button>
+
+                <!-- Menu a tendina Avanzato (raggruppa opzioni di esportazione ed importazione) -->
+                <div class="relative inline-block text-left" id="advancedMenuContainer">
+                    <button id="btnAdvancedMenu" onclick="toggleAdvancedMenu(event)"
+                        class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700 transition flex items-center gap-1.5 focus:outline-none"
+                        title="Opzioni avanzate di importazione ed esportazione">
+                        <i class="fa-solid fa-sliders text-slate-400"></i> Avanzato
+                        <i class="fa-solid fa-chevron-down text-[10px] ml-0.5 text-slate-400 transition-transform duration-200" id="advancedChevron"></i>
+                    </button>
+
+                    <div id="advancedMenuDropdown"
+                        class="hidden absolute right-0 mt-2 w-56 rounded-xl bg-slate-900 border border-slate-700/90 shadow-2xl py-1.5 z-50 backdrop-blur-md">
+                        <input type="file" id="sqliteFileInput" accept=".sqlite,.db,.sqlite3" class="hidden" onchange="handleSqliteImport(event)">
+
+                        <div class="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                            Esportazione
+                        </div>
+                        <button onclick="exportPdfReport(); closeAdvancedMenu();"
+                            class="w-full text-left px-3.5 py-2 text-xs text-slate-200 hover:bg-slate-800 hover:text-white flex items-center gap-2.5 transition">
+                            <i class="fa-solid fa-file-pdf text-rose-400 w-4"></i>
+                            <span>Esporta Referto PDF</span>
+                        </button>
+                        <button onclick="exportCsv(); closeAdvancedMenu();"
+                            class="w-full text-left px-3.5 py-2 text-xs text-slate-200 hover:bg-slate-800 hover:text-white flex items-center gap-2.5 transition">
+                            <i class="fa-solid fa-file-csv text-blue-400 w-4"></i>
+                            <span>Esporta Tabella CSV</span>
+                        </button>
+                        <button onclick="exportSqliteDatabase(); closeAdvancedMenu();"
+                            class="w-full text-left px-3.5 py-2 text-xs text-slate-200 hover:bg-slate-800 hover:text-white flex items-center gap-2.5 transition">
+                            <i class="fa-solid fa-database text-teal-400 w-4"></i>
+                            <span>Esporta Database .sqlite</span>
+                        </button>
+
+                        <div class="h-px bg-slate-800 my-1"></div>
+                        <div class="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                            Importazione & Reset
+                        </div>
+                        <button onclick="document.getElementById('sqliteFileInput').click(); closeAdvancedMenu();"
+                            class="w-full text-left px-3.5 py-2 text-xs text-slate-200 hover:bg-slate-800 hover:text-white flex items-center gap-2.5 transition">
+                            <i class="fa-solid fa-file-import text-amber-400 w-4"></i>
+                            <span>Importa Database .sqlite</span>
+                        </button>
+                        <button onclick="resetToInitialSeed(); closeAdvancedMenu();"
+                            class="w-full text-left px-3.5 py-2 text-xs text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 flex items-center gap-2.5 transition">
+                            <i class="fa-solid fa-rotate-left text-rose-400 w-4"></i>
+                            <span>Ripristina Dati Quaderno</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Bottone Ingranaggio Impostazioni Profilo Paziente -->
+                <button id="btnProfileSettings" onclick="openProfileModal()"
+                    class="relative w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-teal-400 border border-slate-700 transition flex items-center justify-center text-sm shadow-sm active:scale-95"
+                    title="Configura dati paziente (Nome, Cognome, Data di nascita)">
+                    <i class="fa-solid fa-gear"></i>
+                    <span id="profileActiveDot" class="hidden absolute top-1 right-1 w-2 h-2 rounded-full bg-teal-400"></span>
                 </button>
             </div>
         </div>
@@ -616,6 +670,73 @@
         </div>
     </div>
 
+    <!-- MODAL: CONFIGURAZIONE PROFILO PAZIENTE (INGRANAGGIO) -->
+    <div id="profileModal"
+        class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-md shadow-2xl p-6 relative my-8">
+
+            <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-lg bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400">
+                        <i class="fa-solid fa-user-gear text-sm"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-white">Dati Paziente & Referto</h3>
+                        <p class="text-[11px] text-slate-400">Inseriti nell'intestazione dei report PDF esportati o condivisi</p>
+                    </div>
+                </div>
+                <button onclick="closeModal('profileModal')" class="text-slate-400 hover:text-white transition">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <form id="profileForm" onsubmit="handleProfileSubmit(event)" class="mt-4 space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Nome</label>
+                        <input type="text" id="profileNome" placeholder="es. Mario"
+                            class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-teal-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Cognome</label>
+                        <input type="text" id="profileCognome" placeholder="es. Rossi"
+                            class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-teal-500">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Data di Nascita</label>
+                    <input type="date" id="profileDataNascita"
+                        class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white focus:outline-none focus:border-teal-500">
+                    <p class="text-[10px] text-slate-400 mt-1">L'età viene calcolata e inclusa automaticamente nel referto PDF.</p>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Note Cliniche o Terapia (opzionale)</label>
+                    <input type="text" id="profileNote" placeholder="es. Terapia antipertensiva serale, monitoraggio consigliato"
+                        class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-teal-500">
+                </div>
+
+                <div class="p-3 rounded-xl bg-slate-800/50 border border-slate-700/60 text-[11px] text-slate-300 flex items-start gap-2.5">
+                    <i class="fa-solid fa-shield-halved text-teal-400 mt-0.5"></i>
+                    <span>Tutti i dati rimangono privati all'interno del database SQLite sul tuo dispositivo e vengono inclusi nei file esportati.</span>
+                </div>
+
+                <!-- Bottoni Azione -->
+                <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+                    <button type="button" onclick="closeModal('profileModal')"
+                        class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition">
+                        Annulla
+                    </button>
+                    <button type="submit"
+                        class="px-5 py-2 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs transition shadow-lg shadow-teal-500/20">
+                        Salva Dati
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- TOAST NOTIFICATION -->
     <div id="toast"
         class="fixed bottom-5 right-5 z-50 transform translate-y-24 opacity-0 transition-all duration-300 pointer-events-none bg-slate-900 border border-teal-500/50 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-xs">
@@ -702,6 +823,16 @@
           min_2 INTEGER,
           bat_2 INTEGER,
           note TEXT
+        );
+      `);
+            database.run(`
+        CREATE TABLE IF NOT EXISTS profilo_utente (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          nome TEXT,
+          cognome TEXT,
+          data_nascita TEXT,
+          note TEXT,
+          updated_at TEXT
         );
       `);
         }
@@ -1220,6 +1351,7 @@
             renderKPIs(records);
             renderChart(records);
             renderTable(records);
+            updateProfileUI();
         }
 
         // Gestione Slot e Orario nel Modal
@@ -1504,7 +1636,8 @@
                         categoryLabel: cat.label,
                         totalRecords: total
                     },
-                    chartInstance: chartInstance
+                    chartInstance: chartInstance,
+                    userProfile: fetchUserProfile()
                 });
 
                 if (window.location.protocol === 'file:') {
@@ -1517,6 +1650,212 @@
                 showToast("Errore durante la creazione del referto PDF: " + (err.message || err), true);
             }
         }
+
+        // Condivisione Referto PDF via Web Share API (WhatsApp, Telegram, Mail, ecc.)
+        async function sharePdfReport() {
+            const records = getDateFilteredRecords();
+            if (records.length === 0) {
+                showToast("Nessuna misurazione da condividere nel periodo selezionato.", true);
+                return;
+            }
+
+            if (!window.PdfReport || typeof window.PdfReport.createPdfBlob !== 'function') {
+                showToast("Modulo PDF non pronto. Ricarica la pagina.", true);
+                return;
+            }
+
+            try {
+                showToast("Preparazione referto PDF per la condivisione...");
+
+                const total = records.length;
+                const sumMax = records.reduce((acc, r) => acc + r.avg_max, 0);
+                const sumMin = records.reduce((acc, r) => acc + r.avg_min, 0);
+                const sumBat = records.reduce((acc, r) => acc + r.avg_bat, 0);
+
+                const avgMax = Math.round((sumMax / total) * 10) / 10;
+                const avgMin = Math.round((sumMin / total) * 10) / 10;
+                const avgBat = Math.round(sumBat / total);
+                const cat = getBloodPressureCategory(avgMax, avgMin);
+
+                const minDate = records.reduce((min, r) => r.data < min ? r.data : min, records[0].data);
+                const maxDate = records.reduce((max, r) => r.data > max ? r.data : max, records[0].data);
+
+                let rangeLabel = `Dal ${formatDateItalian(minDate)} al ${formatDateItalian(maxDate)}`;
+                if (minDate === maxDate) {
+                    rangeLabel = `In data ${formatDateItalian(minDate)}`;
+                }
+
+                const userProf = fetchUserProfile();
+                const { blob, fileName } = await window.PdfReport.createPdfBlob({
+                    records: records,
+                    dateRangeLabel: rangeLabel,
+                    kpis: {
+                        avgMax: avgMax,
+                        avgMin: avgMin,
+                        avgBat: avgBat,
+                        categoryLabel: cat.label,
+                        totalRecords: total
+                    },
+                    chartInstance: chartInstance,
+                    userProfile: userProf
+                });
+
+                const file = new File([blob], fileName, { type: 'application/pdf' });
+
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    try {
+                        let shareTitle = "Referto Pressione Arteriosa";
+                        if (userProf && (userProf.nome || userProf.cognome)) {
+                            shareTitle += ` - ${userProf.nome || ''} ${userProf.cognome || ''}`.trim();
+                        }
+                        await navigator.share({
+                            files: [file],
+                            title: shareTitle,
+                            text: `Referto clinico della pressione arteriosa (${rangeLabel}).`
+                        });
+                        showToast("Condivisione completata!");
+                    } catch (shareErr) {
+                        if (shareErr.name === 'AbortError') {
+                            console.log("Condivisione annullata dall'utente.");
+                        } else {
+                            throw shareErr;
+                        }
+                    }
+                } else {
+                    if (window.location.protocol === 'file:') {
+                        showToast("Condivisione Web Share non supportata su file:///. Apro il referto in una nuova scheda...");
+                    } else {
+                        showToast("Condivisione diretta non supportata dal browser. Scarico il referto PDF...");
+                    }
+                    await window.PdfReport.generate({
+                        records: records,
+                        dateRangeLabel: rangeLabel,
+                        kpis: {
+                            avgMax: avgMax,
+                            avgMin: avgMin,
+                            avgBat: avgBat,
+                            categoryLabel: cat.label,
+                            totalRecords: total
+                        },
+                        chartInstance: chartInstance,
+                        userProfile: userProf
+                    });
+                }
+            } catch (err) {
+                console.error("Errore condivisione PDF:", err);
+                showToast("Errore durante la condivisione: " + (err.message || err), true);
+            }
+        }
+
+        // --- Gestione Profilo Paziente (Menu Ingranaggio) ---
+        function fetchUserProfile() {
+            if (!db) return null;
+            try {
+                const stmt = db.prepare(`SELECT nome, cognome, data_nascita, note FROM profilo_utente WHERE id = 1`);
+                let profile = null;
+                if (stmt.step()) {
+                    profile = stmt.getAsObject();
+                }
+                stmt.free();
+                return profile;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function saveUserProfile(nome, cognome, dataNascita, note) {
+            if (!db) return false;
+            try {
+                createSchema(db);
+                const stmt = db.prepare(`
+                    INSERT OR REPLACE INTO profilo_utente (id, nome, cognome, data_nascita, note, updated_at)
+                    VALUES (1, ?, ?, ?, ?, datetime('now'))
+                `);
+                stmt.run([nome || '', cognome || '', dataNascita || '', note || '']);
+                stmt.free();
+                saveDatabase();
+                return true;
+            } catch (e) {
+                console.error("Errore salvataggio profilo:", e);
+                return false;
+            }
+        }
+
+        function updateProfileUI() {
+            const prof = fetchUserProfile();
+            const badge = document.getElementById('headerPatientBadge');
+            const nameSpan = document.getElementById('headerPatientName');
+            const activeDot = document.getElementById('profileActiveDot');
+            const btnProfile = document.getElementById('btnProfileSettings');
+
+            if (prof && (prof.nome || prof.cognome)) {
+                const fullName = `${prof.nome || ''} ${prof.cognome || ''}`.trim();
+                if (nameSpan) nameSpan.textContent = fullName;
+                if (badge) badge.classList.remove('hidden');
+                if (activeDot) activeDot.classList.remove('hidden');
+                if (btnProfile) btnProfile.title = `Paziente: ${fullName} (Clicca per modificare)`;
+            } else {
+                if (badge) badge.classList.add('hidden');
+                if (activeDot) activeDot.classList.add('hidden');
+                if (btnProfile) btnProfile.title = `Configura dati paziente (Nome, Cognome, Data di nascita)`;
+            }
+        }
+
+        function openProfileModal() {
+            const prof = fetchUserProfile();
+            document.getElementById('profileNome').value = prof ? (prof.nome || '') : '';
+            document.getElementById('profileCognome').value = prof ? (prof.cognome || '') : '';
+            document.getElementById('profileDataNascita').value = prof ? (prof.data_nascita || '') : '';
+            document.getElementById('profileNote').value = prof ? (prof.note || '') : '';
+            openModal('profileModal');
+        }
+
+        function handleProfileSubmit(event) {
+            event.preventDefault();
+            const nome = document.getElementById('profileNome').value.trim();
+            const cognome = document.getElementById('profileCognome').value.trim();
+            const dataNascita = document.getElementById('profileDataNascita').value;
+            const note = document.getElementById('profileNote').value.trim();
+
+            const ok = saveUserProfile(nome, cognome, dataNascita, note);
+            if (ok) {
+                closeModal('profileModal');
+                updateProfileUI();
+                showToast("Dati paziente salvati nel database con successo!");
+            } else {
+                showToast("Errore nel salvataggio dei dati paziente", true);
+            }
+        }
+
+        // --- Menu a Tendina Avanzato ---
+        function toggleAdvancedMenu(event) {
+            if (event) event.stopPropagation();
+            const dropdown = document.getElementById('advancedMenuDropdown');
+            const chevron = document.getElementById('advancedChevron');
+            if (!dropdown) return;
+            const isHidden = dropdown.classList.contains('hidden');
+            if (isHidden) {
+                dropdown.classList.remove('hidden');
+                if (chevron) chevron.classList.add('rotate-180');
+            } else {
+                dropdown.classList.add('hidden');
+                if (chevron) chevron.classList.remove('rotate-180');
+            }
+        }
+
+        function closeAdvancedMenu() {
+            const dropdown = document.getElementById('advancedMenuDropdown');
+            const chevron = document.getElementById('advancedChevron');
+            if (dropdown) dropdown.classList.add('hidden');
+            if (chevron) chevron.classList.remove('rotate-180');
+        }
+
+        document.addEventListener('click', function (e) {
+            const container = document.getElementById('advancedMenuContainer');
+            if (container && !container.contains(e.target)) {
+                closeAdvancedMenu();
+            }
+        });
 
         // Gestione Selezione Multipla e Cancellazione in Blocco
         function toggleRecordSelection(id, checked) {
@@ -1743,6 +2082,25 @@
                 }
 
                 stmt.free();
+
+                // Importazione opzionale del profilo utente se presente nel file SQLite
+                try {
+                    const checkProf = importedDb.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='profilo_utente'");
+                    if (checkProf.step()) {
+                        const profStmt = importedDb.prepare("SELECT nome, cognome, data_nascita, note FROM profilo_utente WHERE id = 1");
+                        if (profStmt.step()) {
+                            const pRow = profStmt.getAsObject();
+                            if (pRow.nome || pRow.cognome || pRow.data_nascita) {
+                                saveUserProfile(pRow.nome, pRow.cognome, pRow.data_nascita, pRow.note);
+                            }
+                        }
+                        profStmt.free();
+                    }
+                    checkProf.free();
+                } catch (profErr) {
+                    console.warn("Nessun profilo importato:", profErr);
+                }
+
                 importedDb.close();
 
                 saveDatabase();

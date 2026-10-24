@@ -41,20 +41,34 @@ Applicazione web client-side moderna, autonoma e orientata alla privacy per il m
 - **Filtro Temporale Globale**:
   - Selettore rapido di periodo (*Tutto*, *Ultimi 7 gg*, *Ultimi 30 gg*, *Ultimi 3 mesi*, *Personalizzato Da/A*) posizionato in cima alla schermata.
   - Sincronizza istantaneamente e congiuntamente i KPI, il Grafico, la Tabella e l'Esportazione PDF su quel preciso intervallo temporale.
+- **Condividi a 1-Click (Web Share API su Mobile / WhatsApp / Telegram)**:
+  - Pulsante dedicato **"Condividi"** con icona classica a 3 nodi (`fa-share-nodes`).
+  - Su smartphone Android e iOS apre direttamente il foglio nativo di condivisione di sistema, consentendo l'invio immediato del file PDF del referto tramite WhatsApp, Telegram, Gmail, Bluetooth o salvataggio su Drive/File.
+  - Su PC o browser desktop, effettua il fallback automatico aprendo o scaricando il PDF con notifica guidata.
+- **Profilo Paziente & Dati Referto (Menu Ingranaggio ⚙️)**:
+  - Finestra di configurazione accessibile dall'icona dell'ingranaggio nell'intestazione.
+  - Permette di salvare nel database SQLite: **Nome**, **Cognome**, **Data di Nascita** e **Note Cliniche / Terapia**.
+  - Calcola automaticamente l'età del paziente e include i dati anagrafici nell'intestazione clinica del referto PDF (e personalizza il nome file, es. `referto_pressione_rossi_AAAA-MM-GG.pdf`).
+  - Visualizza il nome del paziente attivo direttamente nell'intestazione dell'applicazione.
+- **Menu a Tendina "Avanzato"**:
+  - Raggruppa in un unico menu a scomparsa pulito le opzioni secondarie: *Esporta .sqlite*, *Esporta CSV*, *Importa .sqlite* e *Ripristina Dati Quaderno*, mantenendo la barra superiore snella e ordinata.
 - **Referto Clinico PDF a 1-Click (Modulo Separato `pdf-report.js`)**:
-  - Pulsante **"Esporta PDF"** che genera e scarica direttamente un referto formattato in formato A4.
-  - Include: testata clinica con date del periodo, card statistiche/KPI con classificazione ESC/ESH, immagine del grafico ottimizzata per stampa su fondo bianco e tabella dettagliata di tutte le misurazioni con note.
+  - Pulsante **"Esporta PDF"** che genera e scarica direttamente un referto formattato in formato A4 ad alta risoluzione ma leggero (~40-60 KB).
+  - Include: testata clinica con dati anagrafici paziente ed età, intervallo temporale, card statistiche/KPI con classificazione ESC/ESH, immagine compressa del grafico su fondo bianco e tabella dettagliata di tutte le misurazioni con note.
   - Codice isolato nel modulo autonomo [`pdf-report.js`](file:///d:/Python/DiarioPressione/pdf-report.js).
+- **Filtro Temporale Globale**:
+  - Selettore rapido di periodo (*Tutto*, *Ultimi 7 gg*, *Ultimi 30 gg*, *Ultimi 3 mesi*, *Personalizzato Da/A*) posizionato in cima alla schermata.
+  - Sincronizza istantaneamente e congiuntamente i KPI, il Grafico, la Tabella e l'Esportazione/Condivisione PDF sul periodo prescelto.
 - **Selezione Multipla & Cancellazione in Blocco**:
   - Checkbox per ogni riga e checkbox master "Seleziona tutti" con gestione dello stato indeterminato.
   - Barra d'azione contestuale che indica il numero di record selezionati con pulsante rapido per selezionare l'intero database.
   - Cancellazione massiva sicura con finestra di conferma e ricalcolo immediato di grafici e indicatori KPI.
 - **Importazione Intelligente con Sovrascrittura**:
-  - Pulsante **"Importa .sqlite"** per caricare un database SQLite esistente.
-  - **Regola di unione automatica**: se nel file importato sono presenti misurazioni con le stesse date di calendario e fasce orarie, i vecchi valori vengono automaticamente sovrascritti, mentre le nuove rilevazioni vengono inserite.
+  - Voce **"Importa Database .sqlite"** nel menu Avanzato per caricare un database SQLite esistente.
+  - **Regola di unione automatica**: se nel file importato sono presenti misurazioni con le stesse date di calendario e fasce orarie, i vecchi valori vengono automaticamente sovrascritti, mentre le nuove rilevazioni vengono inserite. Se presente, importa anche il profilo anagrafico del paziente.
 - **Dati Iniziali (Seed Quaderno)**:
   - Precaricato con i dati storici rilevati dal quaderno (sessioni del 21-23 Aprile).
-  - Pulsante dedicato per ripristinare in qualsiasi momento il dataset iniziale.
+  - Opzione nel menu Avanzato per ripristinare in qualsiasi momento il dataset iniziale senza cancellare il profilo utente.
 - **Architettura Zero-Server**:
   - Esecuzione 100% nel browser senza dipendenze backend o configurazioni complesse.
 
@@ -107,7 +121,20 @@ CREATE TABLE misurazioni (
 );
 ```
 
-Ad ogni aggiunta, modifica o eliminazione, l'array binario di SQLite viene esportato e salvato in `localStorage`, assicurando la conservazione dei dati tra le sessioni del browser.
+### Schema della Tabella `profilo_utente`
+
+```sql
+CREATE TABLE profilo_utente (
+    id INTEGER PRIMARY KEY CHECK (id = 1),  -- Singolo profilo paziente
+    nome TEXT,                              -- Nome del paziente
+    cognome TEXT,                           -- Cognome del paziente
+    data_nascita TEXT,                      -- Data di nascita ISO 'AAAA-MM-GG'
+    note TEXT,                              -- Terapia farmacologica o note
+    updated_at TEXT                         -- Timestamp ultimo aggiornamento
+);
+```
+
+Ad ogni aggiunta, modifica o salvataggio del profilo, l'array binario di SQLite viene esportato e salvato in `localStorage`, assicurando la conservazione sia delle rilevazioni pressorie che delle informazioni anagrafiche tra le sessioni del browser.
 
 ---
 

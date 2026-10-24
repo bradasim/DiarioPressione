@@ -97,6 +97,12 @@
             </div>
 
             <div class="flex items-center flex-wrap gap-2">
+                <input type="file" id="sqliteFileInput" accept=".sqlite,.db,.sqlite3" class="hidden" onchange="handleSqliteImport(event)">
+                <button id="btnImportSqlite" onclick="document.getElementById('sqliteFileInput').click()"
+                    class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700 transition flex items-center gap-1.5"
+                    title="Importa un database SQLite (.sqlite) e sovrascrivi i valori con stessa data e fascia oraria">
+                    <i class="fa-solid fa-file-import text-amber-400"></i> Importa .sqlite
+                </button>
                 <button id="btnExportSqlite" onclick="exportSqliteDatabase()"
                     class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700 transition flex items-center gap-1.5"
                     title="Scarica il file di database SQLite effettivo">
@@ -285,11 +291,39 @@
                 </div>
             </div>
 
+            <!-- Barra Azioni Selezione Multipla -->
+            <div id="bulkActionsBar"
+                class="hidden flex-wrap items-center justify-between p-3 rounded-xl bg-teal-950/70 border border-teal-500/40 text-xs gap-3">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span class="w-2 h-2 rounded-full bg-teal-400 animate-pulse"></span>
+                    <span id="bulkSelectionText" class="font-semibold text-teal-200">0 misurazioni selezionate</span>
+                    <button type="button" onclick="selectAllRecordsAcrossDb()" id="btnSelectEntireDb"
+                        class="hidden text-teal-400 hover:text-teal-200 underline font-medium text-[11px] ml-1">
+                        Seleziona tutte le misurazioni del database
+                    </button>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="clearSelection()"
+                        class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs border border-slate-700 transition">
+                        Deseleziona tutti
+                    </button>
+                    <button type="button" onclick="promptBulkDelete()"
+                        class="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition flex items-center gap-1.5 shadow-lg shadow-rose-600/30">
+                        <i class="fa-solid fa-trash-can"></i> Elimina selezionati (<span id="bulkDeleteCountSpan">0</span>)
+                    </button>
+                </div>
+            </div>
+
             <!-- Tabella Scrollabile -->
             <div class="overflow-x-auto rounded-xl border border-slate-800">
                 <table class="w-full text-left text-xs">
                     <thead class="bg-slate-800/80 text-slate-300 uppercase tracking-wider text-[10px] font-semibold">
                         <tr>
+                            <th class="px-3 py-3 w-10 text-center">
+                                <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this.checked)"
+                                    class="w-4 h-4 rounded bg-slate-900 border-slate-700 text-teal-500 focus:ring-0 focus:ring-offset-0 cursor-pointer accent-teal-500"
+                                    title="Seleziona / Deseleziona tutti i visibili">
+                            </th>
                             <th class="px-3 py-3">Data & Momento</th>
                             <th class="px-3 py-3">1ª Misurazione</th>
                             <th class="px-3 py-3">2ª Misurazione (Opzionale)</th>
@@ -473,7 +507,7 @@
         </div>
     </div>
 
-    <!-- MODAL: CONFERMA ELIMINAZIONE -->
+    <!-- MODAL: CONFERMA ELIMINAZIONE SINGOLA -->
     <div id="deleteModal"
         class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-4">
         <div
@@ -501,6 +535,32 @@
         </div>
     </div>
 
+    <!-- MODAL: CONFERMA ELIMINAZIONE MULTIPLA -->
+    <div id="bulkDeleteModal"
+        class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div
+            class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-sm p-6 text-center space-y-4 shadow-2xl">
+            <div
+                class="w-12 h-12 rounded-full bg-rose-500/10 text-rose-500 flex items-center justify-center mx-auto text-xl">
+                <i class="fa-solid fa-trash-can"></i>
+            </div>
+            <div>
+                <h3 class="text-base font-bold text-white">Eliminare <span id="modalBulkDeleteCount">0</span> misurazioni?</h3>
+                <p class="text-xs text-slate-400 mt-1">L'operazione rimuoverà definitivamente le sessioni selezionate dal database SQLite e ricalcolerà i grafici e le medie.</p>
+            </div>
+            <div class="flex items-center justify-center gap-3 pt-2">
+                <button onclick="closeModal('bulkDeleteModal')"
+                    class="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-medium hover:bg-slate-700">
+                    Annulla
+                </button>
+                <button onclick="confirmBulkDelete()"
+                    class="px-4 py-2 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-500 shadow-lg shadow-rose-600/30">
+                    Elimina definitivamente
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- TOAST NOTIFICATION -->
     <div id="toast"
         class="fixed bottom-5 right-5 z-50 transform translate-y-24 opacity-0 transition-all duration-300 pointer-events-none bg-slate-900 border border-teal-500/50 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-xs">
@@ -514,6 +574,8 @@
         let db = null;
         let chartInstance = null;
         let currentFilter = 'all';
+        let selectedRecordIds = new Set();
+        let currentVisibleRecords = [];
 
         // DATI ORIGINALI DALLA FOTO DEL QUADERNO (Partiti il 21 Aprile)
         // 21 Aprile: Mattino (108/76/69 & 108/64/64), Pranzo (112/72/66 & 110/72/64), Cena (107/65/66 & 104/66/64)
@@ -747,6 +809,14 @@
             const searchTerm = (document.getElementById('searchInput').value || '').toLowerCase();
             let records = fetchAllRecords();
 
+            // Pulisci ID selezionati che potrebbero essere stati eliminati
+            const existingIds = new Set(records.map(r => r.id));
+            for (const id of Array.from(selectedRecordIds)) {
+                if (!existingIds.has(id)) {
+                    selectedRecordIds.delete(id);
+                }
+            }
+
             // Ordina in ordine decrescente per visualizzazione (più recenti in alto)
             records.sort((a, b) => {
                 if (a.data !== b.data) return b.data.localeCompare(a.data);
@@ -762,15 +832,18 @@
                 );
             }
 
+            currentVisibleRecords = records;
+
             if (records.length === 0) {
                 tbody.innerHTML = `
           <tr>
-            <td colspan="6" class="text-center py-8 text-slate-500">
+            <td colspan="7" class="text-center py-8 text-slate-500">
               <i class="fa-solid fa-inbox text-3xl mb-2 block"></i>
               Nessuna misurazione trovata.
             </td>
           </tr>
         `;
+                updateBulkSelectionUI();
                 return;
             }
 
@@ -785,9 +858,17 @@
                 };
 
                 const slotBadge = slotBadges[r.slot] || slotBadges['altro'];
+                const isChecked = selectedRecordIds.has(r.id);
 
                 html += `
-          <tr class="hover:bg-slate-800/40 transition">
+          <tr class="hover:bg-slate-800/40 transition ${isChecked ? 'bg-teal-950/20' : ''}">
+            <td class="px-3 py-3 text-center">
+              <input type="checkbox"
+                class="w-4 h-4 rounded bg-slate-900 border-slate-700 text-teal-500 focus:ring-0 focus:ring-offset-0 cursor-pointer accent-teal-500"
+                value="${r.id}"
+                ${isChecked ? 'checked' : ''}
+                onchange="toggleRecordSelection(${r.id}, this.checked)">
+            </td>
             <td class="px-3 py-3">
               <div class="font-bold text-white text-xs">${formatDateItalian(r.data)}</div>
               <div class="mt-1">${slotBadge}</div>
@@ -826,6 +907,7 @@
         `;
             }
             tbody.innerHTML = html;
+            updateBulkSelectionUI();
         }
 
         // Render del Grafico Andamento (Graficando la media per ogni doppia misurazione)
@@ -1160,10 +1242,12 @@
         function confirmDelete() {
             const id = document.getElementById('deleteTargetId').value;
             if (!id || !db) return;
+            const intId = parseInt(id, 10);
             const stmt = db.prepare(`DELETE FROM misurazioni WHERE id = ?`);
-            stmt.run([parseInt(id, 10)]);
+            stmt.run([intId]);
             stmt.free();
 
+            selectedRecordIds.delete(intId);
             saveDatabase();
             closeModal('deleteModal');
             refreshAllViews();
@@ -1176,6 +1260,7 @@
             db.run("DROP TABLE IF EXISTS misurazioni");
             createSchema(db);
             seedInitialData(db);
+            selectedRecordIds.clear();
             saveDatabase();
             refreshAllViews();
             showToast("Ripristinati i valori originali del 21-23 Aprile");
@@ -1224,6 +1309,244 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
             showToast("Esportazione CSV completata");
+        }
+
+        // Gestione Selezione Multipla e Cancellazione in Blocco
+        function toggleRecordSelection(id, checked) {
+            if (checked) {
+                selectedRecordIds.add(id);
+            } else {
+                selectedRecordIds.delete(id);
+            }
+            updateBulkSelectionUI();
+        }
+
+        function toggleSelectAll(checked) {
+            if (checked) {
+                for (const r of currentVisibleRecords) {
+                    selectedRecordIds.add(r.id);
+                }
+            } else {
+                for (const r of currentVisibleRecords) {
+                    selectedRecordIds.delete(r.id);
+                }
+            }
+            renderTable();
+        }
+
+        function selectAllRecordsAcrossDb() {
+            const all = fetchAllRecords();
+            for (const r of all) {
+                selectedRecordIds.add(r.id);
+            }
+            renderTable();
+            showToast(`Selezionate tutte le ${all.length} misurazioni del database`);
+        }
+
+        function clearSelection() {
+            selectedRecordIds.clear();
+            renderTable();
+        }
+
+        function updateBulkSelectionUI() {
+            const bulkBar = document.getElementById('bulkActionsBar');
+            const bulkCountSpan = document.getElementById('bulkSelectionText');
+            const deleteCountSpan = document.getElementById('bulkDeleteCountSpan');
+            const selectAllCb = document.getElementById('selectAllCheckbox');
+            const btnSelectEntireDb = document.getElementById('btnSelectEntireDb');
+
+            if (!bulkBar) return;
+
+            const count = selectedRecordIds.size;
+            const allRecords = fetchAllRecords();
+            const totalDbCount = allRecords.length;
+
+            if (count > 0) {
+                bulkBar.classList.remove('hidden');
+                bulkBar.classList.add('flex');
+                bulkCountSpan.textContent = `${count} ${count === 1 ? 'misurazione selezionata' : 'misurazioni selezionate'}`;
+                deleteCountSpan.textContent = count;
+
+                if (count < totalDbCount) {
+                    btnSelectEntireDb.textContent = `Seleziona tutte le ${totalDbCount} misurazioni del database`;
+                    btnSelectEntireDb.classList.remove('hidden');
+                } else {
+                    btnSelectEntireDb.classList.add('hidden');
+                }
+            } else {
+                bulkBar.classList.add('hidden');
+                bulkBar.classList.remove('flex');
+                if (btnSelectEntireDb) btnSelectEntireDb.classList.add('hidden');
+            }
+
+            if (selectAllCb) {
+                if (currentVisibleRecords.length === 0) {
+                    selectAllCb.checked = false;
+                    selectAllCb.indeterminate = false;
+                } else {
+                    const visibleSelectedCount = currentVisibleRecords.filter(r => selectedRecordIds.has(r.id)).length;
+                    if (visibleSelectedCount === 0) {
+                        selectAllCb.checked = false;
+                        selectAllCb.indeterminate = false;
+                    } else if (visibleSelectedCount === currentVisibleRecords.length) {
+                        selectAllCb.checked = true;
+                        selectAllCb.indeterminate = false;
+                    } else {
+                        selectAllCb.checked = false;
+                        selectAllCb.indeterminate = true;
+                    }
+                }
+            }
+        }
+
+        function promptBulkDelete() {
+            if (selectedRecordIds.size === 0) return;
+            document.getElementById('modalBulkDeleteCount').textContent = selectedRecordIds.size;
+            openModal('bulkDeleteModal');
+        }
+
+        function confirmBulkDelete() {
+            if (!db || selectedRecordIds.size === 0) return;
+            const ids = Array.from(selectedRecordIds);
+            const placeholders = ids.map(() => '?').join(',');
+            const stmt = db.prepare(`DELETE FROM misurazioni WHERE id IN (${placeholders})`);
+            stmt.run(ids);
+            stmt.free();
+
+            const count = ids.length;
+            selectedRecordIds.clear();
+            saveDatabase();
+            closeModal('bulkDeleteModal');
+            refreshAllViews();
+            showToast(`${count} ${count === 1 ? 'misurazione eliminata' : 'misurazioni eliminate'} con successo!`);
+        }
+
+        // Importazione Database SQLite con sovrascrittura automatica su stessa data e fascia oraria
+        async function handleSqliteImport(event) {
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+
+            if (!db) {
+                showToast("Database principale non pronto.", true);
+                event.target.value = '';
+                return;
+            }
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const uInt8Array = new Uint8Array(arrayBuffer);
+
+                const SQL = await initSqlJs({
+                    locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}`
+                });
+
+                let importedDb;
+                try {
+                    importedDb = new SQL.Database(uInt8Array);
+                } catch (e) {
+                    showToast("Il file selezionato non è un database SQLite valido.", true);
+                    event.target.value = '';
+                    return;
+                }
+
+                // Verifica esistenza tabella misurazioni
+                const checkStmt = importedDb.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='misurazioni'");
+                const tableExists = checkStmt.step();
+                checkStmt.free();
+
+                if (!tableExists) {
+                    showToast("Tabella 'misurazioni' non trovata nel database importato.", true);
+                    importedDb.close();
+                    event.target.value = '';
+                    return;
+                }
+
+                const stmt = importedDb.prepare(`
+                    SELECT data, slot, ora, max_1, min_1, bat_1, max_2, min_2, bat_2, note
+                    FROM misurazioni
+                `);
+
+                let insertedCount = 0;
+                let updatedCount = 0;
+
+                while (stmt.step()) {
+                    const row = stmt.getAsObject();
+                    if (!row.data || !row.slot) continue;
+
+                    // Verifica se esiste già un record con la stessa data e fascia oraria
+                    let checkExisting;
+                    if (row.slot === 'altro' && row.ora) {
+                        checkExisting = db.prepare("SELECT id FROM misurazioni WHERE data = ? AND slot = ? AND ora = ?");
+                        checkExisting.bind([row.data, row.slot, row.ora]);
+                    } else {
+                        checkExisting = db.prepare("SELECT id FROM misurazioni WHERE data = ? AND slot = ?");
+                        checkExisting.bind([row.data, row.slot]);
+                    }
+
+                    const max2 = (row.max_2 !== undefined && row.max_2 !== '' && row.max_2 !== null) ? row.max_2 : null;
+                    const min2 = (row.min_2 !== undefined && row.min_2 !== '' && row.min_2 !== null) ? row.min_2 : null;
+                    const bat2 = (row.bat_2 !== undefined && row.bat_2 !== '' && row.bat_2 !== null) ? row.bat_2 : null;
+
+                    if (checkExisting.step()) {
+                        const existingId = checkExisting.getAsObject().id;
+                        checkExisting.free();
+
+                        // Sovrascrive i vecchi valori
+                        const updateStmt = db.prepare(`
+                            UPDATE misurazioni
+                            SET ora = ?, max_1 = ?, min_1 = ?, bat_1 = ?, max_2 = ?, min_2 = ?, bat_2 = ?, note = ?
+                            WHERE id = ?
+                        `);
+                        updateStmt.run([
+                            row.ora || null,
+                            row.max_1,
+                            row.min_1,
+                            row.bat_1,
+                            max2,
+                            min2,
+                            bat2,
+                            row.note || '',
+                            existingId
+                        ]);
+                        updateStmt.free();
+                        updatedCount++;
+                    } else {
+                        checkExisting.free();
+
+                        // Inserisce nuovo record
+                        const insertStmt = db.prepare(`
+                            INSERT INTO misurazioni (data, slot, ora, max_1, min_1, bat_1, max_2, min_2, bat_2, note)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        `);
+                        insertStmt.run([
+                            row.data,
+                            row.slot,
+                            row.ora || null,
+                            row.max_1,
+                            row.min_1,
+                            row.bat_1,
+                            max2,
+                            min2,
+                            bat2,
+                            row.note || ''
+                        ]);
+                        insertStmt.free();
+                        insertedCount++;
+                    }
+                }
+
+                stmt.free();
+                importedDb.close();
+
+                saveDatabase();
+                refreshAllViews();
+                showToast(`Importazione riuscita: ${updatedCount} sovrascritti, ${insertedCount} nuovi inseriti!`);
+            } catch (err) {
+                console.error("Errore importazione SQLite:", err);
+                showToast("Errore durante l'importazione del database SQLite.", true);
+            } finally {
+                event.target.value = '';
+            }
         }
 
         // Gestione Modali

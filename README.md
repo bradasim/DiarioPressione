@@ -12,7 +12,7 @@ Applicazione web client-side moderna, autonoma e orientata alla privacy per il m
 - [Architettura & Schema Database SQLite](#-architettura--schema-database-sqlite)
 - [Avvio Rapido](#-avvio-rapido)
 - [Guida all'Uso](#-guida-alluso)
-- [Esportazione & Backup](#-esportazione--backup)
+- [Importazione, Esportazione & Backup](#-importazione-esportazione--backup)
 - [Privacy e Sicurezza](#-privacy-e-sicurezza)
 - [Note & Disclaimer](#-note--disclaimer)
 
@@ -37,7 +37,14 @@ Applicazione web client-side moderna, autonoma e orientata alla privacy per il m
 - **Registro Storico & Ricerca**:
   - Tabella completa con indicazione di data, momento della giornata, valori della 1ª e 2ª misurazione, media risultante, badge di categoria pressoria e note cliniche.
   - Campo di ricerca dinamica istantanea per data, slot o annotazioni.
-  - Funzioni complete di modifica (Edit) e rimozione (Delete) dei record.
+  - Funzioni complete di modifica (Edit) e rimozione (Delete) dei singoli record.
+- **Selezione Multipla & Cancellazione in Blocco**:
+  - Checkbox per ogni riga e checkbox master "Seleziona tutti" con gestione dello stato indeterminato.
+  - Barra d'azione contestuale che indica il numero di record selezionati con pulsante rapido per selezionare l'intero database.
+  - Cancellazione massiva sicura con finestra di conferma e ricalcolo immediato di grafici e indicatori KPI.
+- **Importazione Intelligente con Sovrascrittura**:
+  - Pulsante **"Importa .sqlite"** per caricare un database SQLite esistente.
+  - **Regola di unione automatica**: se nel file importato sono presenti misurazioni con le stesse date di calendario e fasce orarie, i vecchi valori vengono automaticamente sovrascritti, mentre le nuove rilevazioni vengono inserite.
 - **Dati Iniziali (Seed Quaderno)**:
   - Precaricato con i dati storici rilevati dal quaderno (sessioni del 21-23 Aprile).
   - Pulsante dedicato per ripristinare in qualsiasi momento il dataset iniziale.
@@ -135,19 +142,26 @@ npx serve .
 2. **Consultazione & Ricerca**:
    - Scorri la tabella per vedere lo storico ordinato con le date più recenti in cima.
    - Usa la casella **"Cerca data o slot..."** per filtrare rapidamente i record.
-3. **Modifica ed Eliminazione**:
+3. **Modifica ed Eliminazione Singola**:
    - Usa l'icona della matita per modificare i valori o aggiungere la seconda rilevazione a posteriori.
    - Usa l'icona del cestino per eliminare un record (con finestra di conferma).
-4. **Analisi del Grafico**:
+4. **Selezione Multipla ed Eliminazione in Blocco**:
+   - Seleziona le caselle di spunta (checkbox) sui singoli record desiderati, oppure clicca sulla casella master in cima alla colonna per selezionare/deselezionare tutti i record visibili.
+   - Nella barra azzurra che compare in alto, puoi anche cliccare su *"Seleziona tutte le X misurazioni del database"* per selezionare l'intero archivio in un colpo solo.
+   - Clicca su **"Elimina selezionati"** per aprire il modale di conferma ed eliminare contemporaneamente tutti i record selezionati.
+5. **Analisi del Grafico**:
    - Clicca sui pulsanti di filtro (*Tutti*, *Mattino*, *Pranzo*, *Cena*) per isolare il trend nei diversi momenti della giornata.
 
 ---
 
-## 💾 Esportazione & Backup
+## 💾 Importazione, Esportazione & Backup
 
-In alto nell'intestazione sono disponibili due strumenti di esportazione:
+In alto nell'intestazione sono disponibili gli strumenti per la gestione e la migrazione dei dati:
 
-1. **Esporta `.sqlite`**:
+1. **Importa `.sqlite`**:
+   - Seleziona un file `.sqlite` o `.db` precedentemente esportato o generato altrove.
+   - **Logica di merge con sovrascrittura**: se il file importato contiene misurazioni corrispondenti alla medesima data e fascia oraria (es. mattina del 21 Aprile), i vecchi valori nel database locale vengono aggiornati/sovrascritti con i nuovi valori importati. Le misurazioni per date o momenti non ancora presenti vengono inserite regolarmente.
+2. **Esporta `.sqlite`**:
    - Scarica il file binario SQLite reale (es. `pressione_arteriosa_2026-10-24.sqlite`).
    - Questo file può essere aperto e interrogato con strumenti SQL professionali come **DB Browser for SQLite**, **DBeaver**, o analizzato in Python tramite la libreria standard `sqlite3` o `pandas`:
      ```python
@@ -158,7 +172,7 @@ In alto nell'intestazione sono disponibili due strumenti di esportazione:
      df = pd.read_sql_query("SELECT * FROM misurazioni", conn)
      print(df.head())
      ```
-2. **Esporta CSV**:
+3. **Esporta CSV**:
    - Genera un file `.csv` formattato, comprensivo di medie calcolate, pronto per essere importato in **Microsoft Excel**, **Google Fogli** o inviato al proprio medico curante.
 
 ---

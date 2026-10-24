@@ -1309,17 +1309,23 @@
                 filtered = filtered.filter(r => r.slot === currentFilter);
             }
 
-            // Prepara etichette temporali (es: "21 Apr Mattino")
+            // Prepara etichette temporali sintetiche (es: "24/10" o "24/10 (M)")
             const labels = filtered.map(r => {
-                const parts = r.data.split('-');
-                const shortDate = `${parseInt(parts[2], 10)}/${parseInt(parts[1], 10)}`;
-                const slotInitials = {
-                    'mattino': 'Mattino (06:30)',
-                    'pranzo': 'Pranzo (12:30)',
-                    'cena': 'Cena (19:00)',
-                    'altro': r.ora || 'Altro'
+                const parts = (r.data || '').split('-');
+                const day = parts[2] ? parts[2].padStart(2, '0') : '';
+                const month = parts[1] ? parts[1].padStart(2, '0') : '';
+                const shortDate = `${day}/${month}`;
+                if (currentFilter !== 'all') {
+                    return shortDate;
+                }
+                const slotShort = {
+                    'mattino': 'M',
+                    'pranzo': 'P',
+                    'cena': 'C',
+                    'altro': r.ora || 'A'
                 };
-                return `${shortDate} ${slotInitials[r.slot] || ''}`;
+                const slot = slotShort[r.slot] || '';
+                return slot ? `${shortDate} (${slot})` : shortDate;
             });
 
             const maxData = filtered.map(r => r.avg_max);
@@ -1420,6 +1426,18 @@
                             padding: 10,
                             boxPadding: 4,
                             callbacks: {
+                                title: function (tooltipItems) {
+                                    if (!tooltipItems || !tooltipItems.length) return '';
+                                    const r = filtered[tooltipItems[0].dataIndex];
+                                    if (!r) return '';
+                                    const slotNames = {
+                                        'mattino': 'Mattino (06:30)',
+                                        'pranzo': 'Pranzo (12:30)',
+                                        'cena': 'Cena (19:00)',
+                                        'altro': r.ora ? `Altro (${r.ora})` : 'Altro'
+                                    };
+                                    return `${formatDateItalian(r.data)} • ${slotNames[r.slot] || r.slot}`;
+                                },
                                 label: function (context) {
                                     let label = context.dataset.label || '';
                                     if (label) label += ': ';

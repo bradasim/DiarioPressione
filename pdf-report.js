@@ -143,11 +143,11 @@ window.PdfReport = {
 
         currentY += 27;
 
-        // --- 3. GRAFICO DELL'ANDAMENTO ---
-        if (chartInstance && records && records.length > 0) {
+        // --- 3. GRAFICO DELL'ANDAMENTO (Rendering dedicato ad alta fedeltà senza distorsioni) ---
+        if (records && records.length > 0) {
             try {
-                const chartImg = getCleanChartImage(chartInstance);
-                if (chartImg) {
+                const chartRes = generatePdfChartImage(records, chartInstance);
+                if (chartRes && chartRes.imgData) {
                     doc.setFontSize(9.5);
                     doc.setFont('helvetica', 'bold');
                     doc.setTextColor(30, 41, 59);
@@ -155,9 +155,10 @@ window.PdfReport = {
                     currentY += 3;
 
                     const chartWidth = pageWidth - (margin * 2);
-                    const chartHeight = 52;
+                    // Calcolo altezza proporzionale esatta per EVITARE qualsiasi deformazione
+                    const chartHeight = Math.round((chartRes.height / chartRes.width) * chartWidth * 10) / 10;
 
-                    doc.addImage(chartImg, 'JPEG', margin, currentY, chartWidth, chartHeight);
+                    doc.addImage(chartRes.imgData, chartRes.format || 'PNG', margin, currentY, chartWidth, chartHeight);
                     currentY += chartHeight + 6;
                 }
             } catch (err) {
@@ -325,13 +326,170 @@ function calculateAge(birthDateStr) {
     return age > 0 ? `${age} anni` : '';
 }
 
+/**
+ * Genera un grafico Chart.js dedicato per la stampa su A4:
+ * - Risoluzione 1400x450 px (Retina per stampa nitida)
+ * - Sfondo bianco con testi e griglie scuri ad alto contrasto
+ * - Etichette asse X sintetiche GG/MM con slot compatto (M, P, C)
+ * - Proporzione perfetta senza stiramento anamorfico
+ */
+function generatePdfChartImage(records, fallbackChartInstance) {
+    if (!records || records.length === 0) return null;
+
+    if (typeof window !== 'undefined' && window.Chart) {
+        try {
+            const width = 1400;
+            const height = 450; // Ratio ~3.11 : 1 (perfetto per 182 x 58.5 mm su A4)
+            const offCanvas = document.createElement('canvas');
+            offCanvas.width = width;
+            offCanvas.height = height;
+            const ctx = offCanvas.getContext('2d');
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, width, height);
+
+            // Etichette sintetiche giorno/mese (es. 24/10 o 24/10 (M))
+            const labels = records.map(r => {
+                const parts = (r.data || '').split('-');
+                const day = parts[2] ? parts[2].padStart(2, '0') : '';
+                const month = parts[1] ? parts[1].padStart(2, '0') : '';
+                const shortDate = `${day}/${month}`;
+                const slotShort = {
+                    'mattino': 'M',
+                    'pranzo': 'P',
+                    'cena': 'C',
+                    'altro': r.ora || 'A'
+                };
+                const slot = slotShort[r.slot] || '';
+                return slot ? `${shortDate} (${slot})` : shortDate;
+            });
+
+            const maxData = records.map(r => r.avg_max);
+            const minData = records.map(r => r.avg_min);
+            const batData = records.map(r => r.avg_bat);
+
+            const printChart = new window.Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Pressione Sistolica Media (MAX)',
+                            data: maxData,
+                            borderColor: '#e11d48', // rose-600
+                            backgroundColor: 'rgba(225, 29, 72, 0.08)',
+                            borderWidth: 2.8,
+                            pointBackgroundColor: '#e11d48',
+                            pointBorderColor: '#ffffff',
+                            pointBorderWidth: 1.8,
+                            pointRadius: records.length > 25 ? 3.5 : 5.5,
+                            tension: 0.25,
+                            fill: false
+                        },
+                        {
+                            label: 'Pressione Diastolica Media (MIN)',
+                            data: minData,
+                            borderColor: '#0284c7', // sky-600
+                            backgroundColor: 'rgba(2, 132, 199, 0.08)',
+                            borderWidth: 2.8,
+                            pointBackgroundColor: '#0284c7',
+                            pointBorderColor: '#ffffff',
+                            pointBorderWidth: 1.8,
+                            pointRadius: records.length > 25 ? 3.5 : 5.5,
+                            tension: 0.25,
+                            fill: false
+                        },
+                        {
+                            label: 'Battiti Medi (BPM)',
+                            data: batData,
+                            borderColor: '#059669', // emerald-600
+                            borderDash: [5, 4],
+                            borderWidth: 2.2,
+                            pointBackgroundColor: '#059669',
+                            pointBorderColor: '#ffffff',
+                            pointBorderWidth: 1.5,
+                            pointRadius: records.length > 25 ? 3 : 4.5,
+                            tension: 0.2,
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    animation: false,
+                    responsive: false,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                color: '#0f172a',
+                                font: { size: 13, weight: 'bold', family: 'Helvetica, Arial, sans-serif' },
+                                usePointStyle: true,
+                                boxWidth: 9,
+                                padding: 14
+                            }
+                        },
+                        tooltip: { enabled: false }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: '#e2e8f0', lineWidth: 1 },
+                            ticks: {
+                                color: '#334155',
+                                font: { size: 11.5, weight: 'bold', family: 'Helvetica, Arial, sans-serif' },
+                                maxRotation: 0,
+                                autoSkip: records.length > 20
+                            }
+                        },
+                        y: {
+                            grid: { color: '#e2e8f0', lineWidth: 1 },
+                            ticks: {
+                                color: '#334155',
+                                font: { size: 12, weight: 'bold', family: 'Helvetica, Arial, sans-serif' }
+                            },
+                            suggestedMin: 50,
+                            suggestedMax: 130,
+                            title: {
+                                display: true,
+                                text: 'Valori Medi (mmHg / bpm)',
+                                color: '#475569',
+                                font: { size: 12, weight: 'bold', family: 'Helvetica, Arial, sans-serif' }
+                            }
+                        }
+                    }
+                }
+            });
+
+            printChart.render();
+
+            const finalCanvas = document.createElement('canvas');
+            finalCanvas.width = width;
+            finalCanvas.height = height;
+            const fCtx = finalCanvas.getContext('2d');
+            fCtx.fillStyle = '#ffffff';
+            fCtx.fillRect(0, 0, width, height);
+            fCtx.drawImage(offCanvas, 0, 0);
+
+            const imgData = finalCanvas.toDataURL('image/png');
+            printChart.destroy();
+
+            return { imgData, width, height, format: 'PNG' };
+        } catch (e) {
+            console.warn("Errore rendering grafico PDF dedicato:", e);
+        }
+    }
+
+    return getCleanChartImage(fallbackChartInstance);
+}
+
 function getCleanChartImage(chartInstance) {
     if (!chartInstance || !chartInstance.canvas) return null;
     try {
         const canvas = chartInstance.canvas;
         if (!canvas.width || !canvas.height) return null;
 
-        const targetWidth = 800;
+        const targetWidth = 1000;
         const targetHeight = Math.round((canvas.height / canvas.width) * targetWidth);
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = targetWidth;
@@ -342,7 +500,12 @@ function getCleanChartImage(chartInstance) {
         ctx.fillRect(0, 0, targetWidth, targetHeight);
         ctx.drawImage(canvas, 0, 0, targetWidth, targetHeight);
 
-        return tempCanvas.toDataURL('image/jpeg', 0.82);
+        return {
+            imgData: tempCanvas.toDataURL('image/png'),
+            width: targetWidth,
+            height: targetHeight,
+            format: 'PNG'
+        };
     } catch (e) {
         console.warn("Errore cattura grafico ottimizzato:", e);
         return null;

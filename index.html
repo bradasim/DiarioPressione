@@ -710,6 +710,37 @@
         </div>
     </div>
 
+    <!-- MODAL: CONFERMA RIPRISTINO DATI QUADERNO / AZZERAMENTO -->
+    <div id="resetModal"
+        class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div
+            class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-sm p-6 text-center space-y-4 shadow-2xl">
+            <div
+                class="w-12 h-12 rounded-full bg-rose-500/10 text-rose-500 flex items-center justify-center mx-auto text-xl">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <div>
+                <h3 class="text-base font-bold text-white">Ripristinare i dati del quaderno?</h3>
+                <p class="text-xs text-rose-400 font-semibold mt-1">
+                    <i class="fa-solid fa-circle-exclamation mr-1"></i>Attenzione: tutti i dati memorizzati saranno cancellati!
+                </p>
+                <p class="text-xs text-slate-400 mt-1.5 leading-relaxed">
+                    Questa operazione sostituirà tutte le misurazioni attuali con i dati iniziali del quaderno. L'azione è irreversibile.
+                </p>
+            </div>
+            <div class="flex items-center justify-center gap-3 pt-2">
+                <button onclick="closeModal('resetModal')"
+                    class="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-medium hover:bg-slate-700 transition">
+                    Annulla
+                </button>
+                <button onclick="confirmResetToInitialSeed()"
+                    class="px-4 py-2 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-500 shadow-lg shadow-rose-600/30 transition">
+                    Sì, procedi e cancella
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- MODAL: CONFIGURAZIONE PROFILO PAZIENTE (INGRANAGGIO) -->
     <div id="profileModal"
         class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-4 overflow-y-auto">
@@ -1316,6 +1347,7 @@
                             pointBorderColor: '#ffffff',
                             pointRadius: 4.5,
                             pointHoverRadius: 6.5,
+                            pointHitRadius: 18,
                             tension: 0.25,
                             yAxisID: 'y'
                         },
@@ -1329,6 +1361,7 @@
                             pointBorderColor: '#ffffff',
                             pointRadius: 4.5,
                             pointHoverRadius: 6.5,
+                            pointHitRadius: 18,
                             tension: 0.25,
                             yAxisID: 'y'
                         },
@@ -1343,6 +1376,7 @@
                             pointBorderColor: '#ffffff',
                             pointRadius: 4,
                             pointHoverRadius: 6,
+                            pointHitRadius: 18,
                             tension: 0.2,
                             yAxisID: 'y'
                         }
@@ -1351,9 +1385,21 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    // Disabilita hover da mouse: reagisce unicamente al click / tocco touch
+                    events: ['click'],
                     interaction: {
                         mode: 'index',
-                        intersect: false,
+                        intersect: true,
+                    },
+                    // Gestione click: se si clicca in un punto vuoto del grafico, nasconde il box info
+                    onClick: (event, elements, chart) => {
+                        if (!elements || elements.length === 0) {
+                            if (chart.tooltip) {
+                                chart.tooltip.setActiveElements([], { x: 0, y: 0 });
+                            }
+                            chart.setActiveElements([]);
+                            chart.update();
+                        }
                     },
                     plugins: {
                         legend: {
@@ -1707,16 +1753,26 @@
             showToast("Misurazione eliminata dal database");
         }
 
-        // Ripristino dati originali fotografati
+        // Richiesta conferma ripristino dati iniziali
         function resetToInitialSeed() {
+            openModal('resetModal');
+        }
+
+        // Conferma ed esecuzione del ripristino
+        function confirmResetToInitialSeed() {
             if (!db) return;
             db.run("DROP TABLE IF EXISTS misurazioni");
             createSchema(db);
             seedInitialData(db);
             selectedRecordIds.clear();
             saveDatabase();
+            closeModal('resetModal');
             refreshAllViews();
-            showToast("Ripristinati i valori originali del 21-23 Aprile");
+            if (typeof SEED_DATA !== 'undefined' && SEED_DATA.length > 0) {
+                showToast("Ripristinati i valori originali del quaderno (21-23 Aprile)");
+            } else {
+                showToast("Tutti i dati memorizzati sono stati cancellati!");
+            }
         }
 
         // Esporta file effettivo SQLite .sqlite

@@ -154,11 +154,12 @@ window.PdfReport = {
                     doc.text("Andamento Pressione e Pulsazioni nel Periodo", margin, currentY);
                     currentY += 3;
 
-                    const chartWidth = pageWidth - (margin * 2);
+                    const chartWidth = 190; // Larghezza in mm sul foglio A4 (la pagina è larga 210 mm)
+                    const chartX = (pageWidth - chartWidth) / 2; // Centrato orizzontalmente
                     // Calcolo altezza proporzionale esatta per EVITARE qualsiasi deformazione
                     const chartHeight = Math.round((chartRes.height / chartRes.width) * chartWidth * 10) / 10;
 
-                    doc.addImage(chartRes.imgData, chartRes.format || 'PNG', margin, currentY, chartWidth, chartHeight);
+                    doc.addImage(chartRes.imgData, chartRes.format || 'PNG', chartX, currentY, chartWidth, chartHeight);
                     currentY += chartHeight + 6;
                 }
             } catch (err) {
@@ -338,12 +339,14 @@ function generatePdfChartImage(records, fallbackChartInstance) {
 
     if (typeof window !== 'undefined' && window.Chart) {
         try {
-            const width = 1400;
-            const height = 450; // Ratio ~3.11 : 1 (perfetto per 182 x 58.5 mm su A4)
+            const width = 1600;
+            const height = 500; // Ratio ~3.2 : 1
             const offCanvas = document.createElement('canvas');
             offCanvas.width = width;
             offCanvas.height = height;
             const ctx = offCanvas.getContext('2d');
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
 
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, width, height);
@@ -374,87 +377,128 @@ function generatePdfChartImage(records, fallbackChartInstance) {
                     labels: labels,
                     datasets: [
                         {
-                            label: 'Pressione Sistolica Media (MAX)',
+                            label: 'Sistolica Media (MAX)',
                             data: maxData,
-                            borderColor: '#e11d48', // rose-600
-                            backgroundColor: 'rgba(225, 29, 72, 0.08)',
-                            borderWidth: 2.8,
-                            pointBackgroundColor: '#e11d48',
-                            pointBorderColor: '#ffffff',
-                            pointBorderWidth: 1.8,
-                            pointRadius: records.length > 25 ? 3.5 : 5.5,
+                            borderColor: '#dc2626', // rosso marcato
+                            backgroundColor: 'rgba(220, 38, 38, 0.08)',
+                            borderWidth: 3.2,
+                            pointBackgroundColor: '#dc2626',
+                            pointBorderColor: '#000000',
+                            pointBorderWidth: 1.5,
+                            pointRadius: records.length > 25 ? 4 : 6,
                             tension: 0.25,
                             fill: false
                         },
                         {
-                            label: 'Pressione Diastolica Media (MIN)',
+                            label: 'Diastolica Media (MIN)',
                             data: minData,
-                            borderColor: '#0284c7', // sky-600
+                            borderColor: '#0284c7', // azzurro marcato
                             backgroundColor: 'rgba(2, 132, 199, 0.08)',
-                            borderWidth: 2.8,
+                            borderWidth: 3.2,
                             pointBackgroundColor: '#0284c7',
-                            pointBorderColor: '#ffffff',
-                            pointBorderWidth: 1.8,
-                            pointRadius: records.length > 25 ? 3.5 : 5.5,
+                            pointBorderColor: '#000000',
+                            pointBorderWidth: 1.5,
+                            pointRadius: records.length > 25 ? 4 : 6,
                             tension: 0.25,
                             fill: false
                         },
                         {
                             label: 'Battiti Medi (BPM)',
                             data: batData,
-                            borderColor: '#059669', // emerald-600
+                            borderColor: '#059669', // verde smeraldo
                             borderDash: [5, 4],
-                            borderWidth: 2.2,
+                            borderWidth: 2.8,
                             pointBackgroundColor: '#059669',
-                            pointBorderColor: '#ffffff',
+                            pointBorderColor: '#000000',
                             pointBorderWidth: 1.5,
-                            pointRadius: records.length > 25 ? 3 : 4.5,
+                            pointRadius: records.length > 25 ? 3.5 : 5,
                             tension: 0.2,
                             fill: false
                         }
                     ]
                 },
+                plugins: [
+                    {
+                        id: 'whiteBackground',
+                        beforeDraw: (chart) => {
+                            const c = chart.ctx;
+                            c.save();
+                            c.globalCompositeOperation = 'destination-over';
+                            c.fillStyle = '#ffffff';
+                            c.fillRect(0, 0, chart.width, chart.height);
+                            c.restore();
+                        }
+                    }
+                ],
                 options: {
                     animation: false,
                     responsive: false,
                     maintainAspectRatio: false,
+                    // Blocco a 1: EVITA che lo scaling del monitor (125%/150%) ingrandisca il canvas tagliando bordi e date!
+                    devicePixelRatio: 1,
+                    layout: {
+                        padding: {
+                            left: 65,  // spazio per titolo 'Valori Medi'
+                            right: 40, // spazio a destra per l'ultimo punto
+                            top: 18,   // spazio sopra la legenda
+                            bottom: 50 // spazio sotto per le date GG/MM
+                        }
+                    },
                     plugins: {
                         legend: {
                             display: true,
                             position: 'top',
                             labels: {
-                                color: '#0f172a',
-                                font: { size: 13, weight: 'bold', family: 'Helvetica, Arial, sans-serif' },
+                                color: '#000000', // testo NERO pieno
+                                font: { size: 15, weight: 'bold', family: 'Helvetica, Arial, sans-serif' },
                                 usePointStyle: true,
-                                boxWidth: 9,
-                                padding: 14
+                                boxWidth: 10,
+                                padding: 18
                             }
                         },
                         tooltip: { enabled: false }
                     },
                     scales: {
                         x: {
-                            grid: { color: '#e2e8f0', lineWidth: 1 },
+                            grid: {
+                                color: '#000000', // griglia NERA nitida
+                                lineWidth: 1
+                            },
+                            border: {
+                                color: '#000000', // linea asse NERA
+                                width: 2
+                            },
                             ticks: {
-                                color: '#334155',
-                                font: { size: 11.5, weight: 'bold', family: 'Helvetica, Arial, sans-serif' },
+                                color: '#000000', // etichette NERE
+                                font: { size: 14, weight: 'bold', family: 'Helvetica, Arial, sans-serif' },
+                                padding: 8,
                                 maxRotation: 0,
                                 autoSkip: records.length > 20
                             }
                         },
                         y: {
-                            grid: { color: '#e2e8f0', lineWidth: 1 },
+                            grid: {
+                                color: '#000000', // griglia NERA nitida
+                                lineWidth: 1
+                            },
+                            border: {
+                                color: '#000000', // linea asse NERA
+                                width: 2
+                            },
                             ticks: {
-                                color: '#334155',
-                                font: { size: 12, weight: 'bold', family: 'Helvetica, Arial, sans-serif' }
+                                color: '#000000', // valori NERI
+                                font: { size: 14, weight: 'bold', family: 'Helvetica, Arial, sans-serif' },
+                                padding: 8,
+                                stepSize: 10
                             },
                             suggestedMin: 50,
                             suggestedMax: 130,
                             title: {
                                 display: true,
                                 text: 'Valori Medi (mmHg / bpm)',
-                                color: '#475569',
-                                font: { size: 12, weight: 'bold', family: 'Helvetica, Arial, sans-serif' }
+                                color: '#000000', // titolo NERO
+                                font: { size: 15, weight: 'bold', family: 'Helvetica, Arial, sans-serif' },
+                                padding: { bottom: 10 }
                             }
                         }
                     }
@@ -463,18 +507,13 @@ function generatePdfChartImage(records, fallbackChartInstance) {
 
             printChart.render();
 
-            const finalCanvas = document.createElement('canvas');
-            finalCanvas.width = width;
-            finalCanvas.height = height;
-            const fCtx = finalCanvas.getContext('2d');
-            fCtx.fillStyle = '#ffffff';
-            fCtx.fillRect(0, 0, width, height);
-            fCtx.drawImage(offCanvas, 0, 0);
-
-            const imgData = finalCanvas.toDataURL('image/png');
+            // Esportazione diretta del canvas originale con sfondo bianco (nessun ritaglio o compressione intermedia)
+            const imgData = offCanvas.toDataURL('image/png');
+            const actualWidth = offCanvas.width;
+            const actualHeight = offCanvas.height;
             printChart.destroy();
 
-            return { imgData, width, height, format: 'PNG' };
+            return { imgData, width: actualWidth, height: actualHeight, format: 'PNG' };
         } catch (e) {
             console.warn("Errore rendering grafico PDF dedicato:", e);
         }

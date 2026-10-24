@@ -50,8 +50,13 @@ Applicazione web client-side moderna, autonoma e orientata alla privacy per il m
   - Permette di salvare nel database SQLite: **Nome**, **Cognome**, **Data di Nascita** e **Note Cliniche / Terapia**.
   - Calcola automaticamente l'età del paziente e include i dati anagrafici nell'intestazione clinica del referto PDF (e personalizza il nome file, es. `referto_pressione_rossi_AAAA-MM-GG.pdf`).
   - Visualizza il nome del paziente attivo direttamente nell'intestazione dell'applicazione.
+- **Integrazione con Intelligenza Artificiale (Menu Avanzato)**:
+  - **"Chiedi a Gemini" (1-Click Diretto)**: opzione rapida con badge *1-Click*. Genera il prompt clinico anonimizzato, lo copia istantaneamente negli appunti del dispositivo e apre direttamente l'app nativa Gemini (su Android) o Gemini Web (su PC), saltando qualsiasi passaggio intermedio.
+  - **"Chiedi ad AI" (con Modale)**: apre la finestra di supporto con l'anteprima completa del testo clinico specialistico in formato **Markdown** (suddiviso per ritmo circadiano, correlazione con i battiti e tabella dettagliata delle rilevazioni). Permette di ricopiare il prompt o riselezionarlo per l'incollo in qualsiasi altra IA (come ChatGPT o Claude), oppure di cliccare sul pulsante principale *"Chiedi a Gemini"*.
+  - **Massima Riservatezza & Anonimato**: per tutelare la privacy dell'utente nei confronti dei modelli di intelligenza artificiale, **il nome e il cognome del paziente NON vengono mai inclusi nel prompt**, inviando unicamente l'età biologica calcolata e l'eventuale terapia farmacologica indicata.
+  - **Funzionamento Universale anche su Rete Locale (HTTP LAN)**: include un meccanismo sincrono di copia a prova di bomba che memorizza automaticamente il prompt negli appunti sia su desktop che su smartphone collegati via Wi-Fi (`http://192.168.x.x`).
 - **Menu a Tendina "Avanzato"**:
-  - Raggruppa in un unico menu a scomparsa pulito le opzioni secondarie: *Esporta .sqlite*, *Esporta CSV*, *Importa .sqlite* e *Ripristina Dati Quaderno*, mantenendo la barra superiore snella e ordinata.
+  - Raggruppa in un unico menu a scomparsa pulito le opzioni: *Chiedi a Gemini (1-Click)*, *Chiedi ad AI*, *Esporta Referto PDF*, *Esporta .sqlite*, *Esporta CSV*, *Importa .sqlite* e *Ripristina Dati Quaderno*, mantenendo la barra superiore snella e ordinata.
 - **Referto Clinico PDF a 1-Click (Modulo Separato `pdf-report.js`)**:
   - Pulsante **"Esporta PDF"** che genera e scarica direttamente un referto formattato in formato A4 ad alta risoluzione ma leggero (~40-60 KB).
   - Include: testata clinica con dati anagrafici paziente ed età, intervallo temporale, card statistiche/KPI con classificazione ESC/ESH, immagine compressa del grafico su fondo bianco e tabella dettagliata di tutte le misurazioni con note.

@@ -45,11 +45,12 @@ Applicazione web client-side moderna, autonoma e orientata alla privacy per il m
   - Pulsante dedicato **"Condividi"** con icona classica a 3 nodi (`fa-share-nodes`).
   - Su smartphone Android e iOS apre direttamente il foglio nativo di condivisione di sistema, consentendo l'invio immediato del file PDF del referto tramite WhatsApp, Telegram, Gmail, Bluetooth o salvataggio su Drive/File.
   - Su PC o browser desktop, effettua il fallback automatico aprendo o scaricando il PDF con notifica guidata.
-- **Profilo Paziente & Dati Referto (Menu Ingranaggio ⚙️)**:
+- **Profilo Paziente, Biometria & Dati Referto (Menu Ingranaggio ⚙️)**:
   - Finestra di configurazione accessibile dall'icona dell'ingranaggio nell'intestazione.
-  - Permette di salvare nel database SQLite: **Nome**, **Cognome**, **Data di Nascita** e **Note Cliniche / Terapia**.
-  - Calcola automaticamente l'età del paziente e include i dati anagrafici nell'intestazione clinica del referto PDF (e personalizza il nome file, es. `referto_pressione_rossi_AAAA-MM-GG.pdf`).
-  - Visualizza il nome del paziente attivo direttamente nell'intestazione dell'applicazione.
+  - Permette di salvare nel database SQLite: **Nome**, **Cognome**, **Genere / Sesso** (*Uomo*, *Donna*, *Non specificato*), **Data di Nascita**, **Peso (kg)**, **Altezza (cm)** e **Note Cliniche / Terapia**.
+  - Calcola automaticamente in tempo reale l'età del paziente e l'indice di massa corporea (**BMI** con classificazione clinica ESC/OMS: *Sottopeso*, *Normopeso*, *Sovrappeso*, *Obesità*).
+  - Include i dati anagrafici, il sesso (M/F con desinenza dedicata *Nato/a il*) e i parametri biometrici nell'intestazione clinica del referto PDF (esportato o condiviso) e nei prompt per l'analisi con Intelligenza Artificiale.
+  - Personalizza automaticamente il nome del file generato (es. `referto_pressione_rossi_AAAA-MM-GG.pdf`) e visualizza il nome del paziente attivo direttamente nell'intestazione.
 - **Integrazione con Intelligenza Artificiale (Menu Avanzato)**:
   - **"Chiedi a Gemini" (1-Click Diretto)**: opzione rapida con badge *1-Click*. Genera il prompt clinico anonimizzato, lo copia istantaneamente negli appunti del dispositivo e apre direttamente l'app nativa Gemini (su Android) o Gemini Web (su PC), saltando qualsiasi passaggio intermedio.
   - **"Chiedi ad AI" (con Modale)**: apre la finestra di supporto con l'anteprima completa del testo clinico specialistico in formato **Markdown** (suddiviso per ritmo circadiano, correlazione con i battiti e tabella dettagliata delle rilevazioni). Permette di ricopiare il prompt o riselezionarlo per l'incollo in qualsiasi altra IA (come ChatGPT o Claude), oppure di cliccare sul pulsante principale *"Chiedi a Gemini"*.
@@ -133,7 +134,10 @@ CREATE TABLE profilo_utente (
     id INTEGER PRIMARY KEY CHECK (id = 1),  -- Singolo profilo paziente
     nome TEXT,                              -- Nome del paziente
     cognome TEXT,                           -- Cognome del paziente
+    genere TEXT,                            -- 'uomo', 'donna' o 'non_specificato'
     data_nascita TEXT,                      -- Data di nascita ISO 'AAAA-MM-GG'
+    peso REAL,                              -- Peso corporeo in kg (es. 75.5)
+    altezza REAL,                           -- Altezza in cm (es. 175)
     note TEXT,                              -- Terapia farmacologica o note
     updated_at TEXT                         -- Timestamp ultimo aggiornamento
 );

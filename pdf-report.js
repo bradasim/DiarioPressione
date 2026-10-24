@@ -32,7 +32,9 @@ window.PdfReport = {
         const margin = 14;
 
         // --- 1. HEADER CLINICO (Fascia superiore) ---
-        const headerHeight = (userProfile && (userProfile.nome || userProfile.cognome || userProfile.data_nascita)) ? 34 : 28;
+        const hasProfile = userProfile && (userProfile.nome || userProfile.cognome || userProfile.genere || userProfile.data_nascita || userProfile.peso || userProfile.altezza || userProfile.note);
+        const hasNotes = Boolean(userProfile && userProfile.note && userProfile.note.trim());
+        const headerHeight = hasProfile ? (hasNotes ? 37 : 33) : 28;
         doc.setFillColor(15, 23, 42); // slate-900
         doc.rect(0, 0, pageWidth, headerHeight, 'F');
 
@@ -54,27 +56,56 @@ window.PdfReport = {
         doc.text(`Periodo: ${dateRangeLabel || 'Tutto lo storico'}`, pageWidth - margin, 17, { align: 'right' });
 
         // Dati Paziente nell'header (se configurati dall'ingranaggio)
-        if (userProfile && (userProfile.nome || userProfile.cognome || userProfile.data_nascita)) {
-            let patientLine = "PAZIENTE: ";
+        if (hasProfile) {
+            let patientItems = [];
             const fullName = `${userProfile.nome || ''} ${userProfile.cognome || ''}`.trim();
-            patientLine += fullName ? fullName.toUpperCase() : "NON SPECIFICATO";
+            patientItems.push(`PAZIENTE: ${fullName ? fullName.toUpperCase() : "NON SPECIFICATO"}`);
+
+            if (userProfile.genere === 'uomo') {
+                patientItems.push(`SESSO: M`);
+            } else if (userProfile.genere === 'donna') {
+                patientItems.push(`SESSO: F`);
+            }
 
             if (userProfile.data_nascita) {
                 const age = calculateAge(userProfile.data_nascita);
-                patientLine += `  •  NATO/A: ${formatDateItalianPdf(userProfile.data_nascita)}${age ? ` (${age})` : ''}`;
+                const natoPrefix = (userProfile.genere === 'donna') ? 'NATA IL' : ((userProfile.genere === 'uomo') ? 'NATO IL' : 'NATO/A');
+                patientItems.push(`${natoPrefix}: ${formatDateItalianPdf(userProfile.data_nascita)}${age ? ` (${age})` : ''}`);
             }
 
-            if (userProfile.note) {
-                patientLine += `  •  ${userProfile.note}`;
+            if (userProfile.peso) {
+                patientItems.push(`PESO: ${userProfile.peso} kg`);
             }
 
+            if (userProfile.altezza) {
+                patientItems.push(`ALTEZZA: ${userProfile.altezza} cm`);
+            }
+
+            if (userProfile.peso && userProfile.altezza) {
+                const hMeters = parseFloat(userProfile.altezza) / 100;
+                if (hMeters > 0) {
+                    const bmi = (parseFloat(userProfile.peso) / (hMeters * hMeters)).toFixed(1);
+                    patientItems.push(`BMI: ${bmi}`);
+                }
+            }
+
+            const boxH = hasNotes ? 12 : 8.5;
             doc.setFillColor(30, 41, 59); // slate-800
-            doc.roundedRect(margin, 21.5, pageWidth - (margin * 2), 9, 1.5, 1.5, 'F');
+            doc.roundedRect(margin, 21.5, pageWidth - (margin * 2), boxH, 1.5, 1.5, 'F');
 
             doc.setFont('helvetica', 'bold');
-            doc.setFontSize(7.5);
+            doc.setFontSize(7.2);
             doc.setTextColor(45, 212, 191); // teal-400
-            doc.text(patientLine, margin + 3, 27.5);
+
+            if (hasNotes) {
+                doc.text(patientItems.join('  •  '), margin + 3, 26.2);
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(6.8);
+                doc.setTextColor(203, 213, 225); // slate-300
+                doc.text(`NOTE / TERAPIA: ${userProfile.note}`, margin + 3, 30.8);
+            } else {
+                doc.text(patientItems.join('  •  '), margin + 3, 27.2);
+            }
         }
 
         let currentY = headerHeight + 5;

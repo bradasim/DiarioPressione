@@ -1,0 +1,1302 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diario Pressione Arteriosa | SQLite WebAssembly</title>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- SQL.js (SQLite WebAssembly) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0fdfa',
+                            100: '#ccfbf1',
+                            500: '#14b8a6',
+                            600: '#0d9488',
+                            700: '#0f766e',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+
+        .custom-gradient {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        }
+    </style>
+</head>
+
+<body
+    class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased selection:bg-teal-500 selection:text-white">
+
+    <!-- TOP HEADER -->
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-30 px-4 lg:px-8 py-3.5">
+        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center space-x-3">
+                <div
+                    class="w-10 h-10 rounded-xl bg-gradient-to-tr from-rose-500 to-teal-400 flex items-center justify-center shadow-lg shadow-teal-500/10">
+                    <i class="fa-solid fa-heart-pulse text-white text-xl"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h1 class="font-bold text-lg text-white leading-tight">Diario Pressione Arteriosa</h1>
+                        <span id="wasmBadge"
+                            class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                            <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse mr-1"></span> Avvio Wasm...
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-400">Doppia misurazione giornaliera con SQLite WebAssembly & calcolo
+                        automatico della media</p>
+                </div>
+            </div>
+
+            <div class="flex items-center flex-wrap gap-2">
+                <button id="btnExportSqlite" onclick="exportSqliteDatabase()"
+                    class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700 transition flex items-center gap-1.5"
+                    title="Scarica il file di database SQLite effettivo">
+                    <i class="fa-solid fa-database text-teal-400"></i> Esporta .sqlite
+                </button>
+                <button id="btnExportCsv" onclick="exportCsv()"
+                    class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700 transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-file-csv text-blue-400"></i> Esporta CSV
+                </button>
+                <button onclick="openModal('addModal')"
+                    class="px-4 py-1.5 rounded-lg bg-teal-500 hover:bg-teal-400 text-slate-950 font-semibold text-xs transition flex items-center gap-2 shadow-lg shadow-teal-500/20 active:scale-95">
+                    <i class="fa-solid fa-plus font-bold"></i> Nuova Misurazione
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN CONTAINER -->
+    <main class="flex-grow max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+
+        <!-- KPI / METRIC CARDS -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <!-- Media Sistolica -->
+            <div class="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-4 shadow-sm relative overflow-hidden">
+                <div class="flex items-center justify-between text-slate-400 text-xs font-medium mb-1">
+                    <span>MEDIA MASSIMA (MAX)</span>
+                    <i class="fa-solid fa-arrow-trend-up text-rose-400"></i>
+                </div>
+                <div class="flex items-baseline gap-1">
+                    <span id="kpiAvgMax" class="text-2xl font-bold text-white tracking-tight">--</span>
+                    <span class="text-xs text-slate-400">mmHg</span>
+                </div>
+                <div id="kpiMaxStatus" class="mt-2 text-[11px] text-teal-400 font-medium flex items-center gap-1">
+                    <i class="fa-regular fa-circle-check"></i> In intervallo ottimale
+                </div>
+                <div
+                    class="absolute -right-4 -bottom-4 w-16 h-16 bg-rose-500/5 rounded-full blur-xl pointer-events-none">
+                </div>
+            </div>
+
+            <!-- Media Diastolica -->
+            <div class="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-4 shadow-sm relative overflow-hidden">
+                <div class="flex items-center justify-between text-slate-400 text-xs font-medium mb-1">
+                    <span>MEDIA MINIMA (MIN)</span>
+                    <i class="fa-solid fa-arrow-trend-down text-blue-400"></i>
+                </div>
+                <div class="flex items-baseline gap-1">
+                    <span id="kpiAvgMin" class="text-2xl font-bold text-white tracking-tight">--</span>
+                    <span class="text-xs text-slate-400">mmHg</span>
+                </div>
+                <div id="kpiMinStatus" class="mt-2 text-[11px] text-teal-400 font-medium flex items-center gap-1">
+                    <i class="fa-regular fa-circle-check"></i> Ottimale (&lt; 80)
+                </div>
+                <div
+                    class="absolute -right-4 -bottom-4 w-16 h-16 bg-blue-500/5 rounded-full blur-xl pointer-events-none">
+                </div>
+            </div>
+
+            <!-- Media Battiti -->
+            <div class="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-4 shadow-sm relative overflow-hidden">
+                <div class="flex items-center justify-between text-slate-400 text-xs font-medium mb-1">
+                    <span>FREQUENZA MEDIA</span>
+                    <i class="fa-solid fa-heart text-emerald-400"></i>
+                </div>
+                <div class="flex items-baseline gap-1">
+                    <span id="kpiAvgBat" class="text-2xl font-bold text-white tracking-tight">--</span>
+                    <span class="text-xs text-slate-400">bpm</span>
+                </div>
+                <div class="mt-2 text-[11px] text-slate-400 font-medium">
+                    Riposo regolare (60-100)
+                </div>
+                <div
+                    class="absolute -right-4 -bottom-4 w-16 h-16 bg-emerald-500/5 rounded-full blur-xl pointer-events-none">
+                </div>
+            </div>
+
+            <!-- Totale Sessioni -->
+            <div class="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-4 shadow-sm relative overflow-hidden">
+                <div class="flex items-center justify-between text-slate-400 text-xs font-medium mb-1">
+                    <span>MISURAZIONI REGISTRATE</span>
+                    <i class="fa-solid fa-clipboard-list text-purple-400"></i>
+                </div>
+                <div class="flex items-baseline gap-1">
+                    <span id="kpiTotalRecords" class="text-2xl font-bold text-white tracking-tight">0</span>
+                    <span class="text-xs text-slate-400">sessioni</span>
+                </div>
+                <div class="mt-2 text-[11px] text-slate-400 font-medium">
+                    Dal 21 Aprile (Foto quaderno)
+                </div>
+                <div
+                    class="absolute -right-4 -bottom-4 w-16 h-16 bg-purple-500/5 rounded-full blur-xl pointer-events-none">
+                </div>
+            </div>
+        </div>
+
+        <!-- GRAFICO ANDAMENTO MEDIE -->
+        <div class="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-4 sm:p-6 shadow-sm space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                    <h2 class="text-base font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-chart-line text-teal-400"></i>
+                        Andamento Pressione (Valore Medio Doppia Misurazione)
+                    </h2>
+                    <p class="text-xs text-slate-400">
+                        Per ogni sessione (Mattino 06:30, Pranzo 12:30, Cena 19:00) viene graficata la media tra la 1ª e
+                        la 2ª misurazione.
+                    </p>
+                </div>
+
+                <!-- Filtri Grafico -->
+                <div class="flex items-center gap-2 flex-wrap text-xs">
+                    <span class="text-slate-400">Filtra:</span>
+                    <div class="inline-flex rounded-lg bg-slate-800 p-0.5 border border-slate-700">
+                        <button onclick="setChartFilter('all')" id="btnFilterAll"
+                            class="px-2.5 py-1 rounded-md bg-teal-500 text-slate-950 font-semibold transition">Tutti</button>
+                        <button onclick="setChartFilter('mattino')" id="btnFilterMattino"
+                            class="px-2.5 py-1 rounded-md text-slate-300 hover:text-white transition">Mattino</button>
+                        <button onclick="setChartFilter('pranzo')" id="btnFilterPranzo"
+                            class="px-2.5 py-1 rounded-md text-slate-300 hover:text-white transition">Pranzo</button>
+                        <button onclick="setChartFilter('cena')" id="btnFilterCena"
+                            class="px-2.5 py-1 rounded-md text-slate-300 hover:text-white transition">Cena</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Canvas Grafico -->
+            <div class="relative w-full h-72 sm:h-80 md:h-96">
+                <canvas id="pressureChart"></canvas>
+            </div>
+
+            <!-- Legenda e Soglie ESC/ESH -->
+            <div
+                class="pt-2 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400">
+                <div class="flex items-center gap-4 flex-wrap">
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-3 h-3 rounded-full bg-rose-500 inline-block"></span>
+                        <span>Max Media (Sistolica)</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-3 h-3 rounded-full bg-sky-400 inline-block"></span>
+                        <span>Min Media (Diastolica)</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-3 h-3 rounded-full bg-emerald-400 inline-block"></span>
+                        <span>Battiti Medi (BPM)</span>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span
+                        class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[11px] font-medium border border-emerald-500/20">
+                        Normale: &lt;120 / &lt;80 mmHg
+                    </span>
+                    <span
+                        class="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 text-[11px] font-medium border border-amber-500/20">
+                        Pre-ipertensione: 130-139 / 85-89
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- TABELLA DATI & GESTIONE MISURAZIONI -->
+        <div class="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-4 sm:p-6 shadow-sm space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                    <h2 class="text-base font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-table-list text-teal-400"></i>
+                        Registro Storico delle Misurazioni
+                    </h2>
+                    <p class="text-xs text-slate-400">
+                        Dati memorizzati nel DB SQLite. Clicca su Modifica per aggiornare i valori passati o aggiungere
+                        la seconda misurazione.
+                    </p>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <div class="relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-500 text-xs"></i>
+                        <input type="text" id="searchInput" oninput="renderTable()" placeholder="Cerca data o slot..."
+                            class="pl-8 pr-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-teal-500">
+                    </div>
+                    <button onclick="resetToInitialSeed()"
+                        class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700 transition"
+                        title="Ripristina i dati originali dal quaderno fotografato (21-23 Aprile)">
+                        <i class="fa-solid fa-rotate-left mr-1"></i> Reset Quaderno
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tabella Scrollabile -->
+            <div class="overflow-x-auto rounded-xl border border-slate-800">
+                <table class="w-full text-left text-xs">
+                    <thead class="bg-slate-800/80 text-slate-300 uppercase tracking-wider text-[10px] font-semibold">
+                        <tr>
+                            <th class="px-3 py-3">Data & Momento</th>
+                            <th class="px-3 py-3">1ª Misurazione</th>
+                            <th class="px-3 py-3">2ª Misurazione (Opzionale)</th>
+                            <th class="px-3 py-3 bg-slate-800 font-bold text-teal-300">MEDIA (Graficata)</th>
+                            <th class="px-3 py-3">Stato</th>
+                            <th class="px-3 py-3 text-right">Azioni</th>
+                        </tr>
+                    </thead>
+                    <tbody id="measurementsTableBody" class="divide-y divide-slate-800/70 text-slate-200">
+                        <!-- Dynamic rows inserted by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- SQLITE DATABASE VIEWER & QUERIES (INFO TECNICA) -->
+        <details class="bg-slate-900/60 border border-slate-800/60 rounded-xl p-4 text-xs">
+            <summary
+                class="font-medium text-slate-400 cursor-pointer hover:text-slate-200 flex items-center justify-between">
+                <span class="flex items-center gap-2">
+                    <i class="fa-solid fa-terminal text-teal-400"></i> Informazioni Database SQLite Wasm & Schema SQL
+                </span>
+                <span class="text-[11px] text-teal-400">Mostra dettagli</span>
+            </summary>
+            <div class="mt-3 pt-3 border-t border-slate-800 space-y-2 text-slate-400">
+                <p>I dati risiedono in una vera istanza SQLite compilata in WebAssembly. Ad ogni operazione, il database
+                    binario viene sincronizzato con la memoria persistente del browser (localStorage/IndexedDB) ed è
+                    esportabile integralmente come file <code class="text-teal-300">.sqlite</code> compatibile con
+                    qualsiasi client SQL.</p>
+                <div class="bg-slate-950 p-3 rounded-lg font-mono text-[11px] text-slate-300 overflow-x-auto">
+                    CREATE TABLE misurazioni (<br>
+                    &nbsp;&nbsp;id INTEGER PRIMARY KEY AUTOINCREMENT,<br>
+                    &nbsp;&nbsp;data TEXT NOT NULL, -- 'AAAA-MM-GG'<br>
+                    &nbsp;&nbsp;slot TEXT NOT NULL, -- 'mattino', 'pranzo', 'cena'<br>
+                    &nbsp;&nbsp;ora TEXT, -- es. '06:30', '12:30', '19:00'<br>
+                    &nbsp;&nbsp;max_1 INTEGER NOT NULL, -- Sistolica 1 (mmHg)<br>
+                    &nbsp;&nbsp;min_1 INTEGER NOT NULL, -- Diastolica 1 (mmHg)<br>
+                    &nbsp;&nbsp;bat_1 INTEGER NOT NULL, -- Battiti 1 (bpm)<br>
+                    &nbsp;&nbsp;max_2 INTEGER, -- Sistolica 2 (opzionale)<br>
+                    &nbsp;&nbsp;min_2 INTEGER, -- Diastolica 2 (opzionale)<br>
+                    &nbsp;&nbsp;bat_2 INTEGER, -- Battiti 2 (opzionale)<br>
+                    &nbsp;&nbsp;note TEXT<br>
+                    );
+                </div>
+            </div>
+        </details>
+
+    </main>
+
+    <!-- MODAL: AGGIUNGI / MODIFICA MISURAZIONE -->
+    <div id="addModal"
+        class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-lg shadow-2xl p-6 relative my-8">
+
+            <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+                <h3 id="modalTitle" class="text-base font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-heart-circle-plus text-teal-400"></i> Nuova Misurazione
+                </h3>
+                <button onclick="closeModal('addModal')" class="text-slate-400 hover:text-white transition">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <form id="measurementForm" onsubmit="handleFormSubmit(event)" class="mt-4 space-y-4">
+                <input type="hidden" id="editRecordId" value="">
+
+                <!-- Data e Momento -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Data Misurazione</label>
+                        <input type="date" id="inputDate" required
+                            class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white focus:outline-none focus:border-teal-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Momento della Giornata</label>
+                        <select id="inputSlot" onchange="onSlotChange()"
+                            class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white focus:outline-none focus:border-teal-500">
+                            <option value="mattino">🌅 Mattino (06:30)</option>
+                            <option value="pranzo">☀️ Pranzo (12:30)</option>
+                            <option value="cena">🌙 Cena (19:00)</option>
+                            <option value="altro">⏱️ Altro Orario</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="customTimeContainer" class="hidden">
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Orario personalizzato</label>
+                    <input type="time" id="inputTime"
+                        class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white focus:outline-none focus:border-teal-500">
+                </div>
+
+                <!-- 1ª MISURAZIONE (OBBLIGATORIA) -->
+                <div class="bg-slate-800/60 p-3.5 rounded-xl border border-slate-700/60 space-y-2">
+                    <div class="flex items-center justify-between text-xs font-bold text-teal-300">
+                        <span><i class="fa-solid fa-1 mr-1"></i> Prima Misurazione</span>
+                        <span class="text-[10px] text-teal-400 font-normal">Obbligatoria</span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div>
+                            <label class="block text-[11px] text-slate-400 mb-0.5">MAX (Sistolica)</label>
+                            <input type="number" id="inputMax1" required min="50" max="260" placeholder="es. 110"
+                                oninput="calculateModalAverage()"
+                                class="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-sm font-semibold text-white focus:outline-none focus:border-teal-500 text-center">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] text-slate-400 mb-0.5">MIN (Diastolica)</label>
+                            <input type="number" id="inputMin1" required min="30" max="160" placeholder="es. 70"
+                                oninput="calculateModalAverage()"
+                                class="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-sm font-semibold text-white focus:outline-none focus:border-teal-500 text-center">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] text-slate-400 mb-0.5">BAT (Pulsazioni)</label>
+                            <input type="number" id="inputBat1" required min="30" max="220" placeholder="es. 65"
+                                oninput="calculateModalAverage()"
+                                class="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-sm font-semibold text-white focus:outline-none focus:border-teal-500 text-center">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2ª MISURAZIONE (OPZIONALE) -->
+                <div class="bg-slate-800/40 p-3.5 rounded-xl border border-slate-700/40 space-y-2">
+                    <div class="flex items-center justify-between text-xs font-bold text-slate-300">
+                        <span><i class="fa-solid fa-2 mr-1"></i> Seconda Misurazione</span>
+                        <span class="text-[10px] text-slate-400 font-normal">Opzionale (lascia vuoto se non
+                            rilevata)</span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div>
+                            <label class="block text-[11px] text-slate-400 mb-0.5">MAX (Sistolica)</label>
+                            <input type="number" id="inputMax2" min="50" max="260" placeholder="es. 108"
+                                oninput="calculateModalAverage()"
+                                class="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-sm font-semibold text-white focus:outline-none focus:border-teal-500 text-center">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] text-slate-400 mb-0.5">MIN (Diastolica)</label>
+                            <input type="number" id="inputMin2" min="30" max="160" placeholder="es. 68"
+                                oninput="calculateModalAverage()"
+                                class="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-sm font-semibold text-white focus:outline-none focus:border-teal-500 text-center">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] text-slate-400 mb-0.5">BAT (Pulsazioni)</label>
+                            <input type="number" id="inputBat2" min="30" max="220" placeholder="es. 64"
+                                oninput="calculateModalAverage()"
+                                class="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-sm font-semibold text-white focus:outline-none focus:border-teal-500 text-center">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ANTEPRIMA MEDIA CALCOLATA IN TEMPO REALE -->
+                <div id="previewCard"
+                    class="p-3 bg-teal-950/40 border border-teal-500/30 rounded-xl flex items-center justify-between text-xs">
+                    <div>
+                        <span class="text-teal-400 font-bold block">Media Risultante:</span>
+                        <span id="previewValues" class="text-white font-medium">Inserisci i valori sopra...</span>
+                    </div>
+                    <div id="previewBadge"
+                        class="hidden px-2 py-1 rounded bg-teal-500/20 text-teal-300 font-semibold text-[11px]">
+                        Normale
+                    </div>
+                </div>
+
+                <!-- Note opzionali -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Note o Sintomi (Opzionale)</label>
+                    <input type="text" id="inputNote" placeholder="es. Prima di colazione, leggero affanno..."
+                        class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white focus:outline-none focus:border-teal-500">
+                </div>
+
+                <!-- Bottoni Azione -->
+                <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+                    <button type="button" onclick="closeModal('addModal')"
+                        class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition">
+                        Annulla
+                    </button>
+                    <button type="submit"
+                        class="px-5 py-2 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs transition shadow-lg shadow-teal-500/20">
+                        Salva nel Database
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: CONFERMA ELIMINAZIONE -->
+    <div id="deleteModal"
+        class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div
+            class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-sm p-6 text-center space-y-4 shadow-2xl">
+            <div
+                class="w-12 h-12 rounded-full bg-rose-500/10 text-rose-500 flex items-center justify-center mx-auto text-xl">
+                <i class="fa-solid fa-trash-can"></i>
+            </div>
+            <div>
+                <h3 class="text-base font-bold text-white">Eliminare questa sessione?</h3>
+                <p class="text-xs text-slate-400 mt-1">L'operazione rimuoverà la misurazione dal database SQLite e
+                    ricalcolerà i grafici.</p>
+            </div>
+            <input type="hidden" id="deleteTargetId" value="">
+            <div class="flex items-center justify-center gap-3 pt-2">
+                <button onclick="closeModal('deleteModal')"
+                    class="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-medium hover:bg-slate-700">
+                    Annulla
+                </button>
+                <button onclick="confirmDelete()"
+                    class="px-4 py-2 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-500 shadow-lg shadow-rose-600/30">
+                    Elimina definitivamente
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATION -->
+    <div id="toast"
+        class="fixed bottom-5 right-5 z-50 transform translate-y-24 opacity-0 transition-all duration-300 pointer-events-none bg-slate-900 border border-teal-500/50 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-xs">
+        <i id="toastIcon" class="fa-solid fa-circle-check text-teal-400 text-base"></i>
+        <span id="toastMsg">Operazione completata con successo</span>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        // Global App State
+        let db = null;
+        let chartInstance = null;
+        let currentFilter = 'all';
+
+        // DATI ORIGINALI DALLA FOTO DEL QUADERNO (Partiti il 21 Aprile)
+        // 21 Aprile: Mattino (108/76/69 & 108/64/64), Pranzo (112/72/66 & 110/72/64), Cena (107/65/66 & 104/66/64)
+        // 22 Aprile: Mattino (100/66/59 & 108/64/59), Pranzo (115/73/67 & 113/72/68), Cena (109/78/60 & 110/69/71)
+        // 23 Aprile: Mattino (102/65/62 & 111/65/57)
+        const SEED_DATA = [
+            { data: '2021-04-21', slot: 'mattino', ora: '06:30', max_1: 108, min_1: 76, bat_1: 69, max_2: 108, min_2: 64, bat_2: 64, note: 'Trascritto da quaderno (Merc 21)' },
+            { data: '2021-04-21', slot: 'pranzo', ora: '12:30', max_1: 112, min_1: 72, bat_1: 66, max_2: 110, min_2: 72, bat_2: 64, note: 'Trascritto da quaderno (Merc 21)' },
+            { data: '2021-04-21', slot: 'cena', ora: '19:00', max_1: 107, min_1: 65, bat_1: 66, max_2: 104, min_2: 66, bat_2: 64, note: 'Trascritto da quaderno (Merc 21)' },
+
+            { data: '2021-04-22', slot: 'mattino', ora: '06:30', max_1: 100, min_1: 66, bat_1: 59, max_2: 108, min_2: 64, bat_2: 59, note: 'Trascritto da quaderno (Giov 22)' },
+            { data: '2021-04-22', slot: 'pranzo', ora: '12:30', max_1: 115, min_1: 73, bat_1: 67, max_2: 113, min_2: 72, bat_2: 68, note: 'Trascritto da quaderno (Giov 22)' },
+            { data: '2021-04-22', slot: 'cena', ora: '19:00', max_1: 109, min_1: 78, bat_1: 60, max_2: 110, min_2: 69, bat_2: 71, note: 'Trascritto da quaderno (Giov 22)' },
+
+            { data: '2021-04-23', slot: 'mattino', ora: '06:30', max_1: 102, min_1: 65, bat_1: 62, max_2: 111, min_2: 65, bat_2: 57, note: 'Trascritto da quaderno (Ven 23)' }
+        ];
+
+        const STORAGE_KEY = 'blood_pressure_sqlite_db_v1';
+
+        // Inizializzazione Database SQLite via WebAssembly
+        async function initDatabase() {
+            try {
+                const SQL = await initSqlJs({
+                    locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}`
+                });
+
+                // Controlla salvataggio locale precedente
+                const savedData = localStorage.getItem(STORAGE_KEY);
+                if (savedData) {
+                    const uInt8Array = base64ToUint8(savedData);
+                    db = new SQL.Database(uInt8Array);
+                } else {
+                    db = new SQL.Database();
+                    createSchema(db);
+                    seedInitialData(db);
+                    saveDatabase();
+                }
+
+                // Aggiorna indicatore WebAssembly
+                const badge = document.getElementById('wasmBadge');
+                if (badge) {
+                    badge.className = "inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-teal-500/20 text-teal-300 border border-teal-500/30";
+                    badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-teal-400 mr-1"></span> SQLite Wasm Attivo`;
+                }
+
+                // Aggiorna interfacce
+                refreshAllViews();
+                showToast("Database SQLite caricato con successo");
+            } catch (err) {
+                console.error("Errore inizializzazione SQLite WebAssembly:", err);
+                // Fallback memoria locale se la rete blocca Wasm
+                fallbackInMemoryInit();
+            }
+        }
+
+        // Creazione Schema SQLite
+        function createSchema(database) {
+            database.run(`
+        CREATE TABLE IF NOT EXISTS misurazioni (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          data TEXT NOT NULL,
+          slot TEXT NOT NULL,
+          ora TEXT,
+          max_1 INTEGER NOT NULL,
+          min_1 INTEGER NOT NULL,
+          bat_1 INTEGER NOT NULL,
+          max_2 INTEGER,
+          min_2 INTEGER,
+          bat_2 INTEGER,
+          note TEXT
+        );
+      `);
+        }
+
+        // Caricamento Dati Iniziali dal quaderno
+        function seedInitialData(database) {
+            const stmt = database.prepare(`
+        INSERT INTO misurazioni (data, slot, ora, max_1, min_1, bat_1, max_2, min_2, bat_2, note)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+            for (const item of SEED_DATA) {
+                stmt.run([
+                    item.data, item.slot, item.ora,
+                    item.max_1, item.min_1, item.bat_1,
+                    item.max_2, item.min_2, item.bat_2,
+                    item.note
+                ]);
+            }
+            stmt.free();
+        }
+
+        // Salva il file binario SQLite in localStorage
+        function saveDatabase() {
+            if (!db) return;
+            try {
+                const binary = db.export();
+                const base64 = uint8ToBase64(binary);
+                localStorage.setItem(STORAGE_KEY, base64);
+            } catch (e) {
+                console.error("Errore nel salvataggio del database:", e);
+            }
+        }
+
+        // Utilità Base64 per Uint8Array
+        function uint8ToBase64(u8) {
+            let binary = '';
+            const len = u8.byteLength;
+            for (let i = 0; i < len; i++) {
+                binary += String.fromCharCode(u8[i]);
+            }
+            return window.btoa(binary);
+        }
+
+        function base64ToUint8(base64) {
+            const binary = window.atob(base64);
+            const len = binary.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binary.charCodeAt(i);
+            }
+            return bytes;
+        }
+
+        // Query per ottenere tutte le misurazioni con calcolo medie direttamente o in JS
+        function fetchAllRecords() {
+            if (!db) return [];
+            const stmt = db.prepare(`
+        SELECT 
+          id, data, slot, ora, 
+          max_1, min_1, bat_1, 
+          max_2, min_2, bat_2, 
+          note
+        FROM misurazioni 
+        ORDER BY data ASC, 
+          CASE slot 
+            WHEN 'mattino' THEN 1 
+            WHEN 'pranzo' THEN 2 
+            WHEN 'cena' THEN 3 
+            ELSE 4 
+          END ASC, 
+          ora ASC
+      `);
+
+            const records = [];
+            while (stmt.step()) {
+                const row = stmt.getAsObject();
+                // Calcolo delle medie richieste: se c'è la 2ª misurazione fai (m1 + m2) / 2, altrimenti m1
+                const hasSecond = row.max_2 !== null && row.max_2 !== undefined && row.max_2 > 0;
+
+                const avg_max = hasSecond ? Math.round(((row.max_1 + row.max_2) / 2) * 10) / 10 : row.max_1;
+                const avg_min = hasSecond ? Math.round(((row.min_1 + row.min_2) / 2) * 10) / 10 : row.min_1;
+                const avg_bat = hasSecond ? Math.round(((row.bat_1 + row.bat_2) / 2) * 10) / 10 : row.bat_1;
+
+                records.push({
+                    ...row,
+                    hasSecond,
+                    avg_max,
+                    avg_min,
+                    avg_bat
+                });
+            }
+            stmt.free();
+            return records;
+        }
+
+        // Calcolo Classificazione Medica ESC/ESH
+        function getBloodPressureCategory(max, min) {
+            if (max < 120 && min < 80) {
+                return { label: 'Ottimale', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' };
+            }
+            if (max <= 129 && min <= 84) {
+                return { label: 'Normale', color: 'text-teal-400 bg-teal-500/10 border-teal-500/20' };
+            }
+            if ((max >= 130 && max <= 139) || (min >= 85 && min <= 89)) {
+                return { label: 'Normale-Alta', color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' };
+            }
+            if ((max >= 140 && max <= 159) || (min >= 90 && min <= 99)) {
+                return { label: 'Ipertensione Grado 1', color: 'text-orange-400 bg-orange-500/10 border-orange-500/20' };
+            }
+            if (max >= 160 || min >= 100) {
+                return { label: 'Ipertensione Grado 2+', color: 'text-rose-400 bg-rose-500/10 border-rose-500/20' };
+            }
+            return { label: 'Non classificata', color: 'text-slate-400 bg-slate-800' };
+        }
+
+        // Aggiornamento KPI Dashboard
+        function renderKPIs(records) {
+            const total = records.length;
+            document.getElementById('kpiTotalRecords').textContent = total;
+
+            if (total === 0) {
+                document.getElementById('kpiAvgMax').textContent = '--';
+                document.getElementById('kpiAvgMin').textContent = '--';
+                document.getElementById('kpiAvgBat').textContent = '--';
+                return;
+            }
+
+            const sumMax = records.reduce((acc, r) => acc + r.avg_max, 0);
+            const sumMin = records.reduce((acc, r) => acc + r.avg_min, 0);
+            const sumBat = records.reduce((acc, r) => acc + r.avg_bat, 0);
+
+            const overallMax = Math.round((sumMax / total) * 10) / 10;
+            const overallMin = Math.round((sumMin / total) * 10) / 10;
+            const overallBat = Math.round(sumBat / total);
+
+            document.getElementById('kpiAvgMax').textContent = overallMax;
+            document.getElementById('kpiAvgMin').textContent = overallMin;
+            document.getElementById('kpiAvgBat').textContent = overallBat;
+
+            const category = getBloodPressureCategory(overallMax, overallMin);
+            const kpiMaxStatus = document.getElementById('kpiMaxStatus');
+            kpiMaxStatus.className = `mt-2 text-[11px] font-medium flex items-center gap-1 ${category.color.split(' ')[0]}`;
+            kpiMaxStatus.innerHTML = `<i class="fa-solid fa-heart-pulse"></i> Categoria ESC: ${category.label}`;
+        }
+
+        // Formattazione data italiana con giorno della settimana
+        function formatDateItalian(dateStr) {
+            if (!dateStr) return '';
+            const [year, month, day] = dateStr.split('-');
+            const d = new Date(year, month - 1, day);
+            const days = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
+            const months = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
+            const dayName = days[d.getDay()];
+            const monthName = months[d.getMonth()];
+            return `${dayName} ${parseInt(day, 10)} ${monthName} ${year}`;
+        }
+
+        // Render Tabella Storico
+        function renderTable() {
+            const tbody = document.getElementById('measurementsTableBody');
+            const searchTerm = (document.getElementById('searchInput').value || '').toLowerCase();
+            let records = fetchAllRecords();
+
+            // Ordina in ordine decrescente per visualizzazione (più recenti in alto)
+            records.sort((a, b) => {
+                if (a.data !== b.data) return b.data.localeCompare(a.data);
+                const slotOrder = { 'cena': 3, 'pranzo': 2, 'mattino': 1, 'altro': 4 };
+                return (slotOrder[b.slot] || 0) - (slotOrder[a.slot] || 0);
+            });
+
+            if (searchTerm) {
+                records = records.filter(r =>
+                    r.data.includes(searchTerm) ||
+                    r.slot.toLowerCase().includes(searchTerm) ||
+                    (r.note && r.note.toLowerCase().includes(searchTerm))
+                );
+            }
+
+            if (records.length === 0) {
+                tbody.innerHTML = `
+          <tr>
+            <td colspan="6" class="text-center py-8 text-slate-500">
+              <i class="fa-solid fa-inbox text-3xl mb-2 block"></i>
+              Nessuna misurazione trovata.
+            </td>
+          </tr>
+        `;
+                return;
+            }
+
+            let html = '';
+            for (const r of records) {
+                const cat = getBloodPressureCategory(r.avg_max, r.avg_min);
+                const slotBadges = {
+                    'mattino': '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/20">🌅 Mattino (06:30)</span>',
+                    'pranzo': '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-orange-500/10 text-orange-300 border border-orange-500/20">☀️ Pranzo (12:30)</span>',
+                    'cena': '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">🌙 Cena (19:00)</span>',
+                    'altro': '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-700 text-slate-300">⏱️ Altro</span>'
+                };
+
+                const slotBadge = slotBadges[r.slot] || slotBadges['altro'];
+
+                html += `
+          <tr class="hover:bg-slate-800/40 transition">
+            <td class="px-3 py-3">
+              <div class="font-bold text-white text-xs">${formatDateItalian(r.data)}</div>
+              <div class="mt-1">${slotBadge}</div>
+              ${r.note ? `<div class="text-[11px] text-slate-400 mt-1 italic"><i class="fa-regular fa-comment-dots mr-1"></i>${escapeHtml(r.note)}</div>` : ''}
+            </td>
+            <td class="px-3 py-3 font-mono">
+              <div class="font-bold text-slate-200">${r.max_1} / ${r.min_1} <span class="text-[10px] text-slate-400 font-sans">mmHg</span></div>
+              <div class="text-slate-400 text-[11px]"><i class="fa-solid fa-heart-pulse text-emerald-400 mr-1"></i>${r.bat_1} bpm</div>
+            </td>
+            <td class="px-3 py-3 font-mono">
+              ${r.hasSecond ? `
+                <div class="font-bold text-slate-200">${r.max_2} / ${r.min_2} <span class="text-[10px] text-slate-400 font-sans">mmHg</span></div>
+                <div class="text-slate-400 text-[11px]"><i class="fa-solid fa-heart-pulse text-emerald-400 mr-1"></i>${r.bat_2} bpm</div>
+              ` : `
+                <span class="text-slate-500 italic text-[11px]">Seconda mis. non rilevata</span>
+              `}
+            </td>
+            <td class="px-3 py-3 bg-slate-800/50 font-mono">
+              <div class="font-extrabold text-sm text-teal-300">${r.avg_max} / ${r.avg_min} <span class="text-[10px] text-teal-400 font-sans font-normal">mmHg</span></div>
+              <div class="text-slate-300 text-[11px]"><i class="fa-solid fa-heart text-emerald-400 mr-1"></i>${r.avg_bat} bpm</div>
+            </td>
+            <td class="px-3 py-3">
+              <span class="inline-block px-2 py-0.5 rounded text-[10px] font-semibold border ${cat.color}">
+                ${cat.label}
+              </span>
+            </td>
+            <td class="px-3 py-3 text-right whitespace-nowrap">
+              <button onclick="openEditModal(${r.id})" class="p-1.5 rounded-lg text-slate-400 hover:text-teal-400 hover:bg-slate-800 transition mr-1" title="Modifica misurazione">
+                <i class="fa-solid fa-pen-to-square text-xs"></i>
+              </button>
+              <button onclick="promptDelete(${r.id})" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition" title="Elimina sessione">
+                <i class="fa-solid fa-trash-can text-xs"></i>
+              </button>
+            </td>
+          </tr>
+        `;
+            }
+            tbody.innerHTML = html;
+        }
+
+        // Render del Grafico Andamento (Graficando la media per ogni doppia misurazione)
+        function renderChart() {
+            const records = fetchAllRecords();
+            let filtered = [...records];
+
+            if (currentFilter !== 'all') {
+                filtered = filtered.filter(r => r.slot === currentFilter);
+            }
+
+            // Prepara etichette temporali (es: "21 Apr Mattino")
+            const labels = filtered.map(r => {
+                const parts = r.data.split('-');
+                const shortDate = `${parseInt(parts[2], 10)}/${parseInt(parts[1], 10)}`;
+                const slotInitials = {
+                    'mattino': 'Mattino (06:30)',
+                    'pranzo': 'Pranzo (12:30)',
+                    'cena': 'Cena (19:00)',
+                    'altro': r.ora || 'Altro'
+                };
+                return `${shortDate} ${slotInitials[r.slot] || ''}`;
+            });
+
+            const maxData = filtered.map(r => r.avg_max);
+            const minData = filtered.map(r => r.avg_min);
+            const batData = filtered.map(r => r.avg_bat);
+
+            const ctx = document.getElementById('pressureChart').getContext('2d');
+
+            if (chartInstance) {
+                chartInstance.destroy();
+            }
+
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Pressione Sistolica Media (MAX)',
+                            data: maxData,
+                            borderColor: '#f43f5e', // rose-500
+                            backgroundColor: 'rgba(244, 63, 94, 0.1)',
+                            borderWidth: 2.5,
+                            pointBackgroundColor: '#f43f5e',
+                            pointBorderColor: '#ffffff',
+                            pointRadius: 4.5,
+                            pointHoverRadius: 6.5,
+                            tension: 0.25,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Pressione Diastolica Media (MIN)',
+                            data: minData,
+                            borderColor: '#38bdf8', // sky-400
+                            backgroundColor: 'rgba(56, 189, 248, 0.1)',
+                            borderWidth: 2.5,
+                            pointBackgroundColor: '#38bdf8',
+                            pointBorderColor: '#ffffff',
+                            pointRadius: 4.5,
+                            pointHoverRadius: 6.5,
+                            tension: 0.25,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Battiti Medi (BPM)',
+                            data: batData,
+                            borderColor: '#10b981', // emerald-500
+                            borderDash: [4, 4],
+                            backgroundColor: 'transparent',
+                            borderWidth: 2,
+                            pointBackgroundColor: '#10b981',
+                            pointBorderColor: '#ffffff',
+                            pointRadius: 4,
+                            pointHoverRadius: 6,
+                            tension: 0.2,
+                            yAxisID: 'y'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            labels: {
+                                color: '#cbd5e1',
+                                font: { size: 11, family: 'Inter' },
+                                usePointStyle: true,
+                                boxWidth: 8
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: '#0f172a',
+                            titleColor: '#f8fafc',
+                            bodyColor: '#cbd5e1',
+                            borderColor: '#334155',
+                            borderWidth: 1,
+                            padding: 10,
+                            boxPadding: 4,
+                            callbacks: {
+                                label: function (context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) label += ': ';
+                                    if (context.parsed.y !== null) {
+                                        label += context.parsed.y;
+                                        label += context.datasetIndex === 2 ? ' bpm' : ' mmHg';
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(51, 65, 85, 0.3)' },
+                            ticks: { color: '#94a3b8', font: { size: 10 } }
+                        },
+                        y: {
+                            grid: { color: 'rgba(51, 65, 85, 0.3)' },
+                            ticks: { color: '#94a3b8', font: { size: 11 } },
+                            suggestedMin: 50,
+                            suggestedMax: 130,
+                            title: {
+                                display: true,
+                                text: 'Valori Medi (mmHg / bpm)',
+                                color: '#64748b',
+                                font: { size: 11 }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Filtri grafici
+        function setChartFilter(filter) {
+            currentFilter = filter;
+            ['all', 'mattino', 'pranzo', 'cena'].forEach(f => {
+                const btn = document.getElementById(`btnFilter${f.charAt(0).toUpperCase() + f.slice(1)}`);
+                if (btn) {
+                    if (f === filter) {
+                        btn.className = "px-2.5 py-1 rounded-md bg-teal-500 text-slate-950 font-semibold transition";
+                    } else {
+                        btn.className = "px-2.5 py-1 rounded-md text-slate-300 hover:text-white transition";
+                    }
+                }
+            });
+            renderChart();
+        }
+
+        // Aggiorna tutte le viste (KPI, Grafico, Tabella)
+        function refreshAllViews() {
+            const records = fetchAllRecords();
+            renderKPIs(records);
+            renderChart();
+            renderTable();
+        }
+
+        // Gestione Slot e Orario nel Modal
+        function onSlotChange() {
+            const slot = document.getElementById('inputSlot').value;
+            const customTime = document.getElementById('customTimeContainer');
+            if (slot === 'altro') {
+                customTime.classList.remove('hidden');
+            } else {
+                customTime.classList.add('hidden');
+            }
+            calculateModalAverage();
+        }
+
+        // Calcolo Media in tempo reale all'interno della modale
+        function calculateModalAverage() {
+            const max1 = parseFloat(document.getElementById('inputMax1').value);
+            const min1 = parseFloat(document.getElementById('inputMin1').value);
+            const bat1 = parseFloat(document.getElementById('inputBat1').value);
+
+            const max2 = parseFloat(document.getElementById('inputMax2').value);
+            const min2 = parseFloat(document.getElementById('inputMin2').value);
+            const bat2 = parseFloat(document.getElementById('inputBat2').value);
+
+            const previewValues = document.getElementById('previewValues');
+            const previewBadge = document.getElementById('previewBadge');
+
+            if (isNaN(max1) || isNaN(min1) || isNaN(bat1)) {
+                previewValues.textContent = "Inserisci almeno la prima misurazione completa...";
+                previewBadge.classList.add('hidden');
+                return;
+            }
+
+            let avgMax = max1;
+            let avgMin = min1;
+            let avgBat = bat1;
+            let isDouble = false;
+
+            if (!isNaN(max2) && !isNaN(min2) && !isNaN(bat2) && max2 > 0) {
+                avgMax = Math.round(((max1 + max2) / 2) * 10) / 10;
+                avgMin = Math.round(((min1 + min2) / 2) * 10) / 10;
+                avgBat = Math.round(((bat1 + bat2) / 2) * 10) / 10;
+                isDouble = true;
+            }
+
+            previewValues.innerHTML = `
+        <span class="font-bold text-white text-sm">${avgMax} / ${avgMin} mmHg</span> • 
+        <span class="text-teal-300 font-semibold">${avgBat} bpm</span>
+        <span class="text-[10px] text-slate-400 ml-1">(${isDouble ? 'Media di 2 rilevazioni' : '1 sola rilevazione'})</span>
+      `;
+
+            const cat = getBloodPressureCategory(avgMax, avgMin);
+            previewBadge.textContent = cat.label;
+            previewBadge.className = `px-2 py-0.5 rounded font-semibold text-[10px] border ${cat.color}`;
+            previewBadge.classList.remove('hidden');
+        }
+
+        // Invia form di creazione/modifica
+        function handleFormSubmit(e) {
+            e.preventDefault();
+            if (!db) {
+                showToast("Database non pronto", true);
+                return;
+            }
+
+            const editId = document.getElementById('editRecordId').value;
+            const data = document.getElementById('inputDate').value;
+            const slot = document.getElementById('inputSlot').value;
+
+            let ora = '';
+            if (slot === 'mattino') ora = '06:30';
+            else if (slot === 'pranzo') ora = '12:30';
+            else if (slot === 'cena') ora = '19:00';
+            else ora = document.getElementById('inputTime').value || '12:00';
+
+            const max1 = parseInt(document.getElementById('inputMax1').value, 10);
+            const min1 = parseInt(document.getElementById('inputMin1').value, 10);
+            const bat1 = parseInt(document.getElementById('inputBat1').value, 10);
+
+            const max2Val = document.getElementById('inputMax2').value;
+            const min2Val = document.getElementById('inputMin2').value;
+            const bat2Val = document.getElementById('inputBat2').value;
+
+            const max2 = max2Val ? parseInt(max2Val, 10) : null;
+            const min2 = min2Val ? parseInt(min2Val, 10) : null;
+            const bat2 = bat2Val ? parseInt(bat2Val, 10) : null;
+
+            const note = document.getElementById('inputNote').value.trim();
+
+            // Validazione clinica di base
+            if (max1 <= min1) {
+                showToast("La pressione MAX deve essere superiore alla MIN", true);
+                return;
+            }
+            if (max2 && min2 && max2 <= min2) {
+                showToast("Nella 2ª misurazione la MAX deve essere superiore alla MIN", true);
+                return;
+            }
+
+            if (editId) {
+                // Aggiorna record esistente
+                const stmt = db.prepare(`
+          UPDATE misurazioni 
+          SET data = ?, slot = ?, ora = ?, max_1 = ?, min_1 = ?, bat_1 = ?, max_2 = ?, min_2 = ?, bat_2 = ?, note = ?
+          WHERE id = ?
+        `);
+                stmt.run([data, slot, ora, max1, min1, bat1, max2, min2, bat2, note, parseInt(editId, 10)]);
+                stmt.free();
+                showToast("Misurazione aggiornata nel database!");
+            } else {
+                // Inserisci nuovo record
+                const stmt = db.prepare(`
+          INSERT INTO misurazioni (data, slot, ora, max_1, min_1, bat_1, max_2, min_2, bat_2, note)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+                stmt.run([data, slot, ora, max1, min1, bat1, max2, min2, bat2, note]);
+                stmt.free();
+                showToast("Nuova misurazione salvata con successo!");
+            }
+
+            saveDatabase();
+            closeModal('addModal');
+            refreshAllViews();
+        }
+
+        // Apertura modal per modifica
+        function openEditModal(id) {
+            if (!db) return;
+            const stmt = db.prepare(`SELECT * FROM misurazioni WHERE id = ?`);
+            stmt.bind([id]);
+            if (stmt.step()) {
+                const row = stmt.getAsObject();
+                stmt.free();
+
+                document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-pen-to-square text-teal-400"></i> Modifica Misurazione';
+                document.getElementById('editRecordId').value = row.id;
+                document.getElementById('inputDate').value = row.data;
+                document.getElementById('inputSlot').value = row.slot;
+
+                if (row.slot === 'altro') {
+                    document.getElementById('customTimeContainer').classList.remove('hidden');
+                    document.getElementById('inputTime').value = row.ora || '';
+                } else {
+                    document.getElementById('customTimeContainer').classList.add('hidden');
+                }
+
+                document.getElementById('inputMax1').value = row.max_1;
+                document.getElementById('inputMin1').value = row.min_1;
+                document.getElementById('inputBat1').value = row.bat_1;
+
+                document.getElementById('inputMax2').value = row.max_2 !== null ? row.max_2 : '';
+                document.getElementById('inputMin2').value = row.min_2 !== null ? row.min_2 : '';
+                document.getElementById('inputBat2').value = row.bat_2 !== null ? row.bat_2 : '';
+
+                document.getElementById('inputNote').value = row.note || '';
+
+                calculateModalAverage();
+                openModal('addModal');
+            }
+        }
+
+        // Richiesta cancellazione
+        function promptDelete(id) {
+            document.getElementById('deleteTargetId').value = id;
+            openModal('deleteModal');
+        }
+
+        // Conferma cancellazione
+        function confirmDelete() {
+            const id = document.getElementById('deleteTargetId').value;
+            if (!id || !db) return;
+            const stmt = db.prepare(`DELETE FROM misurazioni WHERE id = ?`);
+            stmt.run([parseInt(id, 10)]);
+            stmt.free();
+
+            saveDatabase();
+            closeModal('deleteModal');
+            refreshAllViews();
+            showToast("Misurazione eliminata dal database");
+        }
+
+        // Ripristino dati originali fotografati
+        function resetToInitialSeed() {
+            if (!db) return;
+            db.run("DROP TABLE IF EXISTS misurazioni");
+            createSchema(db);
+            seedInitialData(db);
+            saveDatabase();
+            refreshAllViews();
+            showToast("Ripristinati i valori originali del 21-23 Aprile");
+        }
+
+        // Esporta file effettivo SQLite .sqlite
+        function exportSqliteDatabase() {
+            if (!db) return;
+            try {
+                const binary = db.export();
+                const blob = new Blob([binary], { type: 'application/x-sqlite3' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `pressione_arteriosa_${new Date().toISOString().slice(0, 10)}.sqlite`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showToast("Database SQLite scaricato");
+            } catch (err) {
+                showToast("Errore durante l'esportazione SQLite", true);
+            }
+        }
+
+        // Esporta CSV
+        function exportCsv() {
+            const records = fetchAllRecords();
+            if (records.length === 0) {
+                showToast("Nessun dato da esportare", true);
+                return;
+            }
+
+            let csv = "ID,Data,Slot,Orario,MAX_1,MIN_1,BAT_1,MAX_2,MIN_2,BAT_2,Media_MAX,Media_MIN,Media_BAT,Note\n";
+            for (const r of records) {
+                csv += `${r.id},"${r.data}","${r.slot}","${r.ora || ''}",${r.max_1},${r.min_1},${r.bat_1},${r.max_2 || ''},${r.min_2 || ''},${r.bat_2 || ''},${r.avg_max},${r.avg_min},${r.avg_bat},"${(r.note || '').replace(/"/g, '""')}"\n`;
+            }
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `diario_pressione_${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast("Esportazione CSV completata");
+        }
+
+        // Gestione Modali
+        function openModal(modalId) {
+            const modal = document.getElementById(modalId);
+            if (modalId === 'addModal' && !document.getElementById('editRecordId').value) {
+                // Reset form per nuova aggiunta
+                document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-heart-circle-plus text-teal-400"></i> Nuova Misurazione';
+                document.getElementById('measurementForm').reset();
+                document.getElementById('editRecordId').value = '';
+
+                // Imposta la data odierna o successiva
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('inputDate').value = today;
+                document.getElementById('inputSlot').value = 'mattino';
+                document.getElementById('customTimeContainer').classList.add('hidden');
+                calculateModalAverage();
+            }
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeModal(modalId) {
+            const modal = document.getElementById(modalId);
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            if (modalId === 'addModal') {
+                document.getElementById('editRecordId').value = '';
+            }
+        }
+
+        // Notifiche Toast
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            const msgSpan = document.getElementById('toastMsg');
+            const icon = document.getElementById('toastIcon');
+
+            msgSpan.textContent = message;
+            if (isError) {
+                icon.className = "fa-solid fa-circle-exclamation text-rose-500 text-base";
+                toast.className = "fixed bottom-5 right-5 z-50 transition-all duration-300 bg-slate-900 border border-rose-500/50 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-xs translate-y-0 opacity-100";
+            } else {
+                icon.className = "fa-solid fa-circle-check text-teal-400 text-base";
+                toast.className = "fixed bottom-5 right-5 z-50 transition-all duration-300 bg-slate-900 border border-teal-500/50 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-xs translate-y-0 opacity-100";
+            }
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-24', 'opacity-0');
+            }, 3200);
+        }
+
+        // Escape per sicurezza stringhe
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+
+        // Fallback qualora WebAssembly non fosse caricabile (es. restrizioni iframe CSP locali)
+        function fallbackInMemoryInit() {
+            const badge = document.getElementById('wasmBadge');
+            if (badge) {
+                badge.className = "inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30";
+                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-blue-400 mr-1"></span> Modalità Compatibilità Locale`;
+            }
+            showToast("Modalità locale attiva", false);
+        }
+
+        // Avvio dell'app al caricamento della finestra
+        window.addEventListener('DOMContentLoaded', () => {
+            initDatabase();
+        });
+    </script>
+</body>
+
+</html>

@@ -150,6 +150,8 @@
                         class="hidden absolute right-0 mt-2 w-64 rounded-xl bg-slate-900 border border-slate-700/90 shadow-2xl py-1.5 z-50 backdrop-blur-md">
                         <input type="file" id="sqliteFileInput" accept=".sqlite,.db,.sqlite3" class="hidden"
                             onchange="handleSqliteImport(event)">
+                        <input type="file" id="jsonFileInput" accept=".json,application/json" class="hidden"
+                            onchange="handleJsonImport(event)">
 
                         <div class="px-3 py-1 text-[10px] font-bold text-indigo-400 uppercase tracking-wider">
                             Intelligenza Artificiale
@@ -198,6 +200,11 @@
                             <i class="fa-solid fa-database text-teal-400 w-4"></i>
                             <span>Esporta Database .sqlite</span>
                         </button>
+                        <button onclick="exportJsonDatabase(); closeAdvancedMenu();"
+                            class="w-full text-left px-3.5 py-2 text-xs text-slate-200 hover:bg-slate-800 hover:text-white flex items-center gap-2.5 transition">
+                            <i class="fa-solid fa-file-code text-amber-400 w-4"></i>
+                            <span>Esporta Database .json</span>
+                        </button>
 
                         <div class="h-px bg-slate-800 my-1"></div>
                         <div class="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
@@ -205,8 +212,13 @@
                         </div>
                         <button onclick="document.getElementById('sqliteFileInput').click(); closeAdvancedMenu();"
                             class="w-full text-left px-3.5 py-2 text-xs text-slate-200 hover:bg-slate-800 hover:text-white flex items-center gap-2.5 transition">
-                            <i class="fa-solid fa-file-import text-amber-400 w-4"></i>
+                            <i class="fa-solid fa-database text-teal-400 w-4"></i>
                             <span>Importa Database .sqlite</span>
+                        </button>
+                        <button onclick="document.getElementById('jsonFileInput').click(); closeAdvancedMenu();"
+                            class="w-full text-left px-3.5 py-2 text-xs text-slate-200 hover:bg-slate-800 hover:text-white flex items-center gap-2.5 transition">
+                            <i class="fa-solid fa-file-import text-amber-400 w-4"></i>
+                            <span>Importa Database .json</span>
                         </button>
                         <button onclick="resetToInitialSeed(); closeAdvancedMenu();"
                             class="w-full text-left px-3.5 py-2 text-xs text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 flex items-center gap-2.5 transition">
@@ -499,7 +511,7 @@
                 <p>I dati risiedono in una vera istanza SQLite compilata in WebAssembly. Ad ogni operazione, il database
                     binario viene sincronizzato con la memoria persistente del browser (localStorage/IndexedDB) ed è
                     esportabile integralmente come file <code class="text-teal-300">.sqlite</code> compatibile con
-                    qualsiasi client SQL.</p>
+                    qualsiasi client SQL o come file <code class="text-amber-300">.json</code> portabile.</p>
                 <div class="bg-slate-950 p-3 rounded-lg font-mono text-[11px] text-slate-300 overflow-x-auto">
                     CREATE TABLE misurazioni (<br>
                     &nbsp;&nbsp;id INTEGER PRIMARY KEY AUTOINCREMENT,<br>
@@ -1813,6 +1825,60 @@
             }
         }
 
+        // Esporta l'intero database e il profilo in formato JSON
+        function exportJsonDatabase() {
+            if (!db) {
+                showToast("Database principale non pronto.", true);
+                return;
+            }
+            try {
+                // Recupera tutte le misurazioni ordinate
+                const stmt = db.prepare(`
+                    SELECT data, slot, ora, max_1, min_1, bat_1, max_2, min_2, bat_2, note
+                    FROM misurazioni
+                    ORDER BY data ASC,
+                      CASE slot
+                        WHEN 'mattino' THEN 1
+                        WHEN 'pranzo' THEN 2
+                        WHEN 'cena' THEN 3
+                        ELSE 4
+                      END ASC,
+                      ora ASC
+                `);
+                const misurazioni = [];
+                while (stmt.step()) {
+                    misurazioni.push(stmt.getAsObject());
+                }
+                stmt.free();
+
+                // Recupera il profilo paziente se configurato
+                const profilo = fetchUserProfile();
+
+                const exportData = {
+                    app: "Diario Pressione Arteriosa",
+                    version: "1.0",
+                    export_date: new Date().toISOString(),
+                    profilo: profilo || null,
+                    misurazioni: misurazioni
+                };
+
+                const jsonStr = JSON.stringify(exportData, null, 2);
+                const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `pressione_arteriosa_${new Date().toISOString().slice(0, 10)}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showToast("Database JSON scaricato con successo");
+            } catch (err) {
+                console.error("Errore durante l'esportazione JSON:", err);
+                showToast("Errore durante l'esportazione JSON", true);
+            }
+        }
+
         // Esporta CSV
         function exportCsv() {
             const records = getDateFilteredRecords();
@@ -2757,6 +2823,181 @@ ${slots.altro.count > 0 ? formatSlotSummary("⏱️ Altro Orario", slots.altro) 
             } catch (err) {
                 console.error("Errore importazione SQLite:", err);
                 showToast("Errore durante l'importazione del database SQLite.", true);
+            } finally {
+                event.target.value = '';
+            }
+        }
+
+        // Importazione Database JSON con sovrascrittura automatica su stessa data e fascia oraria
+        async function handleJsonImport(event) {
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+
+            if (!db) {
+                showToast("Database principale non pronto.", true);
+                event.target.value = '';
+                return;
+            }
+
+            try {
+                const text = await file.text();
+                let importedData;
+                try {
+                    importedData = JSON.parse(text);
+                } catch (e) {
+                    showToast("Il file selezionato non è un file JSON valido.", true);
+                    event.target.value = '';
+                    return;
+                }
+
+                // Supporta sia l'oggetto esportato { app, profilo, misurazioni: [...] }
+                // sia un semplice array diretto [ { data, slot, ... } ]
+                let misurazioni = null;
+                let profilo = null;
+
+                if (Array.isArray(importedData)) {
+                    misurazioni = importedData;
+                } else if (importedData && typeof importedData === 'object') {
+                    if (Array.isArray(importedData.misurazioni)) {
+                        misurazioni = importedData.misurazioni;
+                    } else if (Array.isArray(importedData.records)) {
+                        misurazioni = importedData.records;
+                    } else if (Array.isArray(importedData.data)) {
+                        misurazioni = importedData.data;
+                    }
+
+                    if (importedData.profilo && typeof importedData.profilo === 'object') {
+                        profilo = importedData.profilo;
+                    } else if (importedData.profilo_utente && typeof importedData.profilo_utente === 'object') {
+                        profilo = importedData.profilo_utente;
+                    }
+                }
+
+                if ((!misurazioni || misurazioni.length === 0) && !profilo) {
+                    showToast("Nessuna misurazione o profilo trovato nel file JSON.", true);
+                    event.target.value = '';
+                    return;
+                }
+
+                let insertedCount = 0;
+                let updatedCount = 0;
+
+                if (misurazioni && misurazioni.length > 0) {
+                    for (const row of misurazioni) {
+                        if (!row) continue;
+                        const dateStr = (row.data || row.date || '').toString().trim().replace(/\//g, '-');
+                        let slot = (row.slot || '').toString().toLowerCase().trim();
+                        if (!slot) {
+                            slot = row.ora ? 'altro' : 'mattino';
+                        }
+
+                        if (!dateStr) continue;
+
+                        const max1 = parseInt(row.max_1 ?? row.max1 ?? row.sistolica_1 ?? row.sistolica, 10);
+                        const min1 = parseInt(row.min_1 ?? row.min1 ?? row.diastolica_1 ?? row.diastolica, 10);
+                        const bat1 = parseInt(row.bat_1 ?? row.bat1 ?? row.bpm_1 ?? row.frequenza_1 ?? row.bpm, 10);
+
+                        if (isNaN(max1) || isNaN(min1) || isNaN(bat1)) {
+                            continue;
+                        }
+
+                        const rawMax2 = row.max_2 ?? row.max2 ?? row.sistolica_2;
+                        const rawMin2 = row.min_2 ?? row.min2 ?? row.diastolica_2;
+                        const rawBat2 = row.bat_2 ?? row.bat2 ?? row.bpm_2 ?? row.frequenza_2;
+
+                        const max2 = (rawMax2 !== undefined && rawMax2 !== '' && rawMax2 !== null && !isNaN(parseInt(rawMax2, 10))) ? parseInt(rawMax2, 10) : null;
+                        const min2 = (rawMin2 !== undefined && rawMin2 !== '' && rawMin2 !== null && !isNaN(parseInt(rawMin2, 10))) ? parseInt(rawMin2, 10) : null;
+                        const bat2 = (rawBat2 !== undefined && rawBat2 !== '' && rawBat2 !== null && !isNaN(parseInt(rawBat2, 10))) ? parseInt(rawBat2, 10) : null;
+                        const noteStr = (row.note !== undefined && row.note !== null) ? String(row.note) : '';
+                        const oraStr = (row.ora !== undefined && row.ora !== null && String(row.ora).trim() !== '') ? String(row.ora).trim() : null;
+
+                        // Verifica se esiste già un record con la stessa data e fascia oraria
+                        let checkExisting;
+                        if (slot === 'altro' && oraStr) {
+                            checkExisting = db.prepare("SELECT id FROM misurazioni WHERE data = ? AND slot = ? AND ora = ?");
+                            checkExisting.bind([dateStr, slot, oraStr]);
+                        } else {
+                            checkExisting = db.prepare("SELECT id FROM misurazioni WHERE data = ? AND slot = ?");
+                            checkExisting.bind([dateStr, slot]);
+                        }
+
+                        if (checkExisting.step()) {
+                            const existingId = checkExisting.getAsObject().id;
+                            checkExisting.free();
+
+                            // Sovrascrive i vecchi valori
+                            const updateStmt = db.prepare(`
+                                UPDATE misurazioni
+                                SET ora = ?, max_1 = ?, min_1 = ?, bat_1 = ?, max_2 = ?, min_2 = ?, bat_2 = ?, note = ?
+                                WHERE id = ?
+                            `);
+                            updateStmt.run([
+                                oraStr,
+                                max1,
+                                min1,
+                                bat1,
+                                max2,
+                                min2,
+                                bat2,
+                                noteStr,
+                                existingId
+                            ]);
+                            updateStmt.free();
+                            updatedCount++;
+                        } else {
+                            checkExisting.free();
+
+                            // Inserisce nuovo record
+                            const insertStmt = db.prepare(`
+                                INSERT INTO misurazioni (data, slot, ora, max_1, min_1, bat_1, max_2, min_2, bat_2, note)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            `);
+                            insertStmt.run([
+                                dateStr,
+                                slot,
+                                oraStr,
+                                max1,
+                                min1,
+                                bat1,
+                                max2,
+                                min2,
+                                bat2,
+                                noteStr
+                            ]);
+                            insertStmt.free();
+                            insertedCount++;
+                        }
+                    }
+                }
+
+                // Importazione opzionale profilo utente
+                let importedProfile = false;
+                if (profilo && (profilo.nome || profilo.cognome || profilo.genere || profilo.data_nascita || profilo.peso || profilo.altezza || profilo.note)) {
+                    saveUserProfile(
+                        profilo.nome,
+                        profilo.cognome,
+                        profilo.genere,
+                        profilo.data_nascita,
+                        profilo.peso,
+                        profilo.altezza,
+                        profilo.note
+                    );
+                    importedProfile = true;
+                }
+
+                saveDatabase();
+                refreshAllViews();
+
+                let message = `Importazione JSON riuscita: ${updatedCount} sovrascritti, ${insertedCount} nuovi inseriti!`;
+                if (importedProfile && insertedCount === 0 && updatedCount === 0) {
+                    message = "Profilo utente importato e aggiornato con successo!";
+                } else if (importedProfile) {
+                    message += " (Profilo aggiornato)";
+                }
+                showToast(message);
+            } catch (err) {
+                console.error("Errore importazione JSON:", err);
+                showToast("Errore durante l'importazione del file JSON.", true);
             } finally {
                 event.target.value = '';
             }

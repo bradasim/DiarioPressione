@@ -57,7 +57,7 @@ Applicazione web client-side moderna, autonoma e orientata alla privacy per il m
   - **Massima Riservatezza & Anonimato**: per tutelare la privacy dell'utente nei confronti dei modelli di intelligenza artificiale, **il nome e il cognome del paziente NON vengono mai inclusi nel prompt**, inviando unicamente l'età biologica calcolata e l'eventuale terapia farmacologica indicata.
   - **Funzionamento Universale anche su Rete Locale (HTTP LAN)**: include un meccanismo sincrono di copia a prova di bomba che memorizza automaticamente il prompt negli appunti sia su desktop che su smartphone collegati via Wi-Fi (`http://192.168.x.x`).
 - **Menu a Tendina "Avanzato"**:
-  - Raggruppa in un unico menu a scomparsa pulito le opzioni: *Chiedi a Gemini (1-Click)*, *Chiedi ad AI*, *Esporta Referto PDF*, *Esporta .sqlite*, *Esporta CSV*, *Importa .sqlite* e *Ripristina Dati Quaderno*, mantenendo la barra superiore snella e ordinata.
+  - Raggruppa in un unico menu a scomparsa pulito le opzioni: *Chiedi a Gemini (1-Click)*, *Chiedi ad AI*, *Esporta Referto PDF*, *Esporta .sqlite*, *Esporta .json*, *Esporta CSV*, *Importa .sqlite*, *Importa .json* e *Ripristina Dati Quaderno*, mantenendo la barra superiore snella e ordinata.
 - **Referto Clinico PDF a 1-Click (Modulo Separato `pdf-report.js`)**:
   - Pulsante **"Esporta PDF"** che genera e scarica direttamente un referto formattato in formato A4 ad alta risoluzione ma leggero (~40-60 KB).
   - Include: testata clinica con dati anagrafici paziente ed età, intervallo temporale, card statistiche/KPI con classificazione ESC/ESH, immagine compressa del grafico su fondo bianco e tabella dettagliata di tutte le misurazioni con note.
@@ -69,9 +69,9 @@ Applicazione web client-side moderna, autonoma e orientata alla privacy per il m
   - Checkbox per ogni riga e checkbox master "Seleziona tutti" con gestione dello stato indeterminato.
   - Barra d'azione contestuale che indica il numero di record selezionati con pulsante rapido per selezionare l'intero database.
   - Cancellazione massiva sicura con finestra di conferma e ricalcolo immediato di grafici e indicatori KPI.
-- **Importazione Intelligente con Sovrascrittura**:
-  - Voce **"Importa Database .sqlite"** nel menu Avanzato per caricare un database SQLite esistente.
-  - **Regola di unione automatica**: se nel file importato sono presenti misurazioni con le stesse date di calendario e fasce orarie, i vecchi valori vengono automaticamente sovrascritti, mentre le nuove rilevazioni vengono inserite. Se presente, importa anche il profilo anagrafico del paziente.
+- **Importazione Intelligente con Sovrascrittura (.sqlite e .json)**:
+  - Voci **"Importa Database .sqlite"** e **"Importa Database .json"** nel menu Avanzato per caricare un database esistente sia in formato SQLite nativo che in formato JSON interoperabile.
+  - **Regola di unione automatica**: se nel file importato sono presenti misurazioni con le stesse date di calendario e fasce orarie, i vecchi valori vengono automaticamente sovrascritti, mentre le nuove rilevazioni vengono inserite. Se presente, importa e aggiorna anche il profilo anagrafico del paziente.
 - **Dati Iniziali (Seed Quaderno)**:
   - Precaricato con i dati storici rilevati dal quaderno (sessioni del 21-23 Aprile).
   - Opzione nel menu Avanzato per ripristinare in qualsiasi momento il dataset iniziale senza cancellare il profilo utente.
@@ -202,9 +202,9 @@ npx serve .
 
 In alto nell'intestazione sono disponibili gli strumenti per la gestione e la migrazione dei dati:
 
-1. **Importa `.sqlite`**:
-   - Seleziona un file `.sqlite` o `.db` precedentemente esportato o generato altrove.
-   - **Logica di merge con sovrascrittura**: se il file importato contiene misurazioni corrispondenti alla medesima data e fascia oraria (es. mattina del 21 Aprile), i vecchi valori nel database locale vengono aggiornati/sovrascritti con i nuovi valori importati. Le misurazioni per date o momenti non ancora presenti vengono inserite regolarmente.
+1. **Importa `.sqlite` o `.json`**:
+   - Seleziona un file `.sqlite` / `.db` o un file `.json` esportato in precedenza o strutturato.
+   - **Logica di merge con sovrascrittura**: se il file importato contiene misurazioni corrispondenti alla medesima data e fascia oraria (es. mattina del 21 Aprile), i vecchi valori nel database locale vengono aggiornati/sovrascritti con i nuovi valori importati. Le misurazioni per date o momenti non ancora presenti vengono inserite regolarmente. Se il file include i dati del profilo paziente, vengono anch'essi acquisiti e aggiornati.
 2. **Esporta `.sqlite`**:
    - Scarica il file binario SQLite reale (es. `pressione_arteriosa_2026-10-24.sqlite`).
    - Questo file può essere aperto e interrogato con strumenti SQL professionali come **DB Browser for SQLite**, **DBeaver**, o analizzato in Python tramite la libreria standard `sqlite3` o `pandas`:
@@ -216,9 +216,12 @@ In alto nell'intestazione sono disponibili gli strumenti per la gestione e la mi
      df = pd.read_sql_query("SELECT * FROM misurazioni", conn)
      print(df.head())
      ```
-3. **Esporta CSV**:
+3. **Esporta `.json`**:
+   - Scarica l'intero database e profilo anagrafico in formato aperto e strutturato JSON (es. `pressione_arteriosa_2026-10-24.json`).
+   - Ideale per backup leggibili in chiaro, facile integrazione con altre piattaforme, scripting e portabilità immediata senza bisogno di lettori SQL binari.
+4. **Esporta CSV**:
    - Genera un file `.csv` formattato, comprensivo di medie calcolate, pronto per essere importato in **Microsoft Excel**, **Google Fogli** o inviato al proprio medico curante.
-4. **Esporta Referto PDF**:
+5. **Esporta Referto PDF**:
    - Genera istantaneamente il documento PDF `referto_pressione_AAAA-MM-GG.pdf` strutturato su misura per la consultazione medica (impaginazione A4, sfondo bianco a risparmio inchiostro, testata clinica con intervallo di date, sintesi statistiche, grafico e tabella analitica).
 
 ---

@@ -6,6 +6,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Diario Pressione Arteriosa | SQLite WebAssembly</title>
 
+    <!-- PWA & Mobile Web App Meta Tags -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0d9488">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Diario Pressione">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="icon" type="image/svg+xml" href="icon.svg">
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Chart.js CDN -->
@@ -116,6 +127,13 @@
             </div>
 
             <div class="flex items-center flex-wrap gap-2">
+                <!-- Bottone Installa PWA (visibile su browser compatibili / mobile se non già installata) -->
+                <button id="btnInstallPwa" onclick="promptPwaInstall()"
+                    class="hidden px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition flex items-center gap-1.5 shadow-lg shadow-emerald-600/20 active:scale-95"
+                    title="Installa l'app sullo smartphone o sul PC">
+                    <i class="fa-solid fa-download"></i> Installa App
+                </button>
+
                 <!-- Bottone Condividi (Web Share API su mobile / PDF download fallback) -->
                 <button id="btnSharePdf" onclick="sharePdfReport()"
                     class="px-3.5 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-semibold text-xs transition flex items-center gap-2 shadow-lg shadow-sky-500/20 active:scale-95"
@@ -3072,6 +3090,54 @@ ${slots.altro.count > 0 ? formatSlotSummary("⏱️ Altro Orario", slots.altro) 
         // Avvio dell'app al caricamento della finestra
         window.addEventListener('DOMContentLoaded', () => {
             initDatabase();
+        });
+
+        // ==========================================
+        // PWA SERVICE WORKER & INSTALL PROMPT
+        // ==========================================
+        let deferredPrompt = null;
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then((reg) => {
+                        console.log('[PWA] Service Worker registrato con successo, scope:', reg.scope);
+                    })
+                    .catch((err) => {
+                        console.warn('[PWA] Registrazione Service Worker non riuscita:', err);
+                    });
+            });
+        }
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            // Impedisce la comparsa del banner automatico standard per mostrare il nostro bottone
+            e.preventDefault();
+            deferredPrompt = e;
+            const btn = document.getElementById('btnInstallPwa');
+            if (btn) btn.classList.remove('hidden');
+        });
+
+        function promptPwaInstall() {
+            if (!deferredPrompt) {
+                showToast("Per installare, apri il menu del browser e seleziona 'Aggiungi a schermata Home'", false);
+                return;
+            }
+            deferredPrompt.prompt();
+            deferredPrompt.userChoice.then((choiceResult) => {
+                if (choiceResult && choiceResult.outcome === 'accepted') {
+                    showToast("Applicazione installata con successo!", false);
+                }
+                deferredPrompt = null;
+                const btn = document.getElementById('btnInstallPwa');
+                if (btn) btn.classList.add('hidden');
+            });
+        }
+
+        window.addEventListener('appinstalled', () => {
+            console.log('[PWA] Applicazione installata con successo');
+            const btn = document.getElementById('btnInstallPwa');
+            if (btn) btn.classList.add('hidden');
+            showToast("Diario Pressione installato!", false);
         });
     </script>
 </body>
